@@ -321,8 +321,6 @@ class Game:
         return player
 
 
-
-
 merchant_event_list = [
     ['Cornucopia', 1],        # +2 food every turn
     ['Route to Mahaji', 1],   # Spice is worth $20 more
@@ -443,10 +441,10 @@ class AI:
             # Make all options
             # TODO - Logic for witch and merchant will just append
             if current.day < current.max_day and current.bought_last is False:
-                days_left = current.max_day - current.day - 1
+                days_left = current.max_day - current.day
                 food_multi = 2 if days_left > 1 else 0
                 current_cost = self.game.check__food_cost(current)
-                max_food = min(current.gold // self.game.item_shop['Food'][Store.BUY], self.game.check__weight_left(current) // self.game.item_shop['Food'][Store.WEIGHT], days_left * current_cost - current.food)
+                max_food = min(current.gold // self.game.item_shop['Food'][Store.BUY], self.game.check__weight_left(current) // self.game.item_shop['Food'][Store.WEIGHT])
 
                 # THIS IS AN ALT THAT I DON"T THINK IS THAT MUCH BETTER
                 # options = set()
@@ -461,7 +459,7 @@ class AI:
                 #             for l in range(i):
                 #                 next_day_needs.append(need+current_cost+l)
 
-                needed_food = max(0, food_multi * self.game.check__food_cost(current) - current.food)
+                needed_food = max(0, food_multi * current_cost - current.food)
                 # Buy Items -- Everything
                 for i in range(needed_food, max_food+1):
                     to_buy = self.game.check__find_buy(current, i)
@@ -471,7 +469,7 @@ class AI:
                     hold[reprocess].append(buy_everything)
 
                 # Buy Items -- only Food
-                needed_food = max(1, food_multi*self.game.check__food_cost(current) - current.food)
+                needed_food = max(1, food_multi*current_cost - current.food)
                 for i in range(needed_food, max_food+1):
                     to_buy = self.game.check__find_buy(current, i, True)
                     new_action = [f'Buy - {to_buy}']
@@ -519,9 +517,6 @@ class AI:
                         hold[reprocess].append(interest)
                     else:
                         hold[solved].append(interest)
-
-
-
 
             if len(hold[solved]) >= 1000:
                 hold[solved].sort(key=lambda x: self.game.check__points(x), reverse=True)
