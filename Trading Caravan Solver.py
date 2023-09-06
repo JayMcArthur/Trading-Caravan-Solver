@@ -264,7 +264,7 @@ class Game:
         weight = self.item_shop[item_to_check][Store.WEIGHT]
         sell = self.item_shop[item_to_check][Store.SELL]
         buy = self.item_shop[item_to_check][Store.BUY]
-        if item_to_check == 'Silk' and player.route_to_mahaji:
+        if item_to_check == 'Spice' and player.route_to_mahaji:
             sell += 20
         if item_to_check == 'Silk' and player.oasis_of_sanctifan:
             buy += 200
@@ -314,10 +314,8 @@ class Game:
                     player = self.end_of_day(player, [f'{event[0]}'])
                 case 'Merchant':
                     player = self.event_merchant(player, event[1])
-                    player = self.end_of_day(player, [f'{event[1]}'])
                 case 'Witch':
                     player = self.event_witch(player, event[1])
-                    player = self.end_of_day(player, [f'{event[1]}'])
         return player
 
 
@@ -380,7 +378,7 @@ class AI:
             self.start_player = self.game.game_loop(self.start_player, que)
         self.game_array.append(self.start_player)
 
-    def find_solve(self):
+    def find_solve_pool(self):
         day = self.game_array[0].day
         seen = set()
         while True:
@@ -406,13 +404,32 @@ class AI:
                 for item in solved:
                     self.finished_array.append(item)
 
-        print(f'Printing Solves')
-        self.finished_array.sort(key=lambda x: self.game.check__points(x), reverse=True)
-        for i in range(10):
-            print(f'Place {i + 1}: {self.game.check__points(self.finished_array[i])} points')
-            print(self.finished_array[i])
-            print(self.finished_array[i].actions)
-            print("")
+        self.print_solves()
+
+    def find_solve_loop(self):
+        day = self.game_array[0].day
+        while True:
+            if len(self.game_array) == 0:
+                break
+
+            self.game_array.sort(key=lambda x: self.game.check__points(x), reverse=True)
+            self.game_array = self.game_array[0:self.limit]
+
+            day += 1
+            print(f'Processing Day {day} - #{len(self.game_array)}')
+
+            current_states = self.game_array
+            self.game_array = []
+
+            result = self.execute_events(current_states)
+
+            reprocess, solved = result
+            for player in reprocess:
+                self.game_array.append(player)
+            for item in solved:
+                self.finished_array.append(item)
+
+        self.print_solves()
 
     def execute_events(self, to_process):
         hold = [[], []]
@@ -422,6 +439,7 @@ class AI:
             # Copy and delete what we are working with
             current: Player = to_process.pop()
 
+            # These don't give gold before doing the event
             if self.game.merch_on and current.merchant_happened is False and (current.day + 1 in self.game.merch_days or self.game.merch_days == -1):
                 for [action, cost] in merchant_event_list:
                     if current.gold >= cost * (25 - (5 * self.game.merch_discount)):
@@ -434,7 +452,7 @@ class AI:
                     to_process.append(witch_event)
 
             current = self.game.start_of_day(current)
-            if current.gold < 0:
+            if current.food < 0:
                 # print('Starved to death: ' + path[-1])
                 continue
 
@@ -523,6 +541,15 @@ class AI:
                 hold[solved] = hold[1][0:10]
         return hold
 
+    def print_solves(self):
+        print(f'Printing Solves')
+        self.finished_array.sort(key=lambda x: self.game.check__points(x), reverse=True)
+        for i in range(10):
+            print(f'Place {i + 1}: {self.game.check__points(self.finished_array[i])} points')
+            print(self.finished_array[i])
+            print(self.finished_array[i].actions)
+            print("")
+
     def town_effect(self, town):
         match town:
             case 'Normalia':
@@ -573,10 +600,14 @@ class AI:
 
 
 if __name__ == '__main__':
-    solver = AI(town=town_list[2], limit=1000000, with_merch=True, with_witch=False, que=[
+    que = [
         ['Trader'],
         ['Trader'],
         ['Trader'],
         ['Camel']
-    ])
-    solver.find_solve()
+    ]
+    que = None
+    solver = AI(town=town_list[0], limit=10000, with_merch=True, with_witch=False, que=None)
+    solver.find_solve_loop()
+    # Loop Time: 128
+    # Pool Time: 114
