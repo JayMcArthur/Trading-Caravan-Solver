@@ -1,8 +1,8 @@
 from Enums import TownOptions, PlayerAction, all_merch_options, all_witch_options, Items, ItemData, NPCData, NPCs
-from Game import apply_town, auto_game_loop, start_of_day, event_merchant, event_witch, check__food_cost, \
-    check__weight_left, find_buy, check__has_items, event_sell_items, event_buy_npc, event_interest
+from Game import apply_town, auto_game_loop, start_of_day, event_merchant, event_witch, check__weight_left, \
+    find_buy, check__has_items, event_sell_items, event_buy_npc, event_interest
 from player import Player
-from dataclasses import replace as dcReplace
+from dataclasses import replace as dc_replace
 import pickle
 
 
@@ -51,6 +51,7 @@ class BruteForceSolver:
 
         round_num = 0
         # TODO Add thread stuff here
+        # TODO only add option if it isn't already processed
         while len(self.to_process) > 0:
             # Copy and delete what we are working with
             current: Player = self.to_process.pop()
@@ -79,7 +80,7 @@ class BruteForceSolver:
                     if hash_on:
                         self.hash_table[current_hash]["makes"]["working"] = []
                         self.hash_table[current_hash]["best"] = 1
-                    self.cleanup_hash(current_hash)
+                        self.cleanup_hash(current_hash)
                     continue
 
                 # Merchant Event
@@ -100,9 +101,9 @@ class BruteForceSolver:
                         self.to_process.append(witch_event)
 
             else:
-                next_day: Player = dcReplace(current, day_start_skip=False)
+                next_day: Player = dc_replace(current, day_start_skip=False)
 
-            current_food_cost = check__food_cost(next_day)
+            current_food_cost = next_day.food_consumption
 
             # Buy Event
             # Check you didn't just buy
@@ -199,7 +200,7 @@ class BruteForceSolver:
                                              finished_obj=interest_event)
                         self.finished.append(interest_event)
 
-            if next_day.day == next_day.max_day:
+            if hash_on and next_day.day == next_day.max_day:
                 self.cleanup_hash(current_hash)
 
             if len(self.finished) >= self.limit:
@@ -248,3 +249,4 @@ class BruteForceSolver:
             for father_hash in self.hash_table[hash_to_check]["from"]:
                 self.cleanup_hash(father_hash, self.hash_table[hash_to_check]["best"],
                                   self.hash_table[hash_to_check]["best_obj"], hash_to_check)
+            # self.hash_table.pop(hash_to_check)  # Remove completed Hash can't do this as then lower searchs just research

@@ -11,9 +11,11 @@ class Player:
     marble: int = field(default=0, compare=False, hash=True)
     silk: int = field(default=0, compare=False, hash=True)
     jewelry: int = field(default=0, compare=False, hash=True)
+    fang_mo_pot: int = field(default=0, compare=False, hash=True)
     # Crew
     trader: int = field(default=1, compare=False, hash=True)
     camel: int = field(default=1, compare=False, hash=True)
+    food_consumption: int = field(default=2, compare=False, hash=True)
     # Stores
     item_shop: list[list[int]] = field(default_factory=lambda: [
         # [Buy, Sell, Weight] # Sell Value, Profit per weight
@@ -36,8 +38,7 @@ class Player:
     daily_income: int = field(default=0, compare=False, hash=True)
     interest_rate: float = field(default=1.5, compare=False, hash=True)
     set_interest: bool = field(default=False, compare=False, hash=True)
-    one_stable_interest: bool = field(default=False, compare=False, hash=True)
-    cornucopia: bool = field(default=False, compare=False, hash=True)
+    quick_interest: bool = field(default=False, compare=False, hash=True)
     statue: bool = field(default=False, compare=False, hash=True)
     hand_of_midas: bool = field(default=False, compare=False, hash=True)
     merch_discount: bool = field(default=False, compare=False, hash=True)

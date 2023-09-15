@@ -28,7 +28,7 @@ class NPCData(IntEnum):
 
 
 class MerchOptions(IntEnum):
-    Cornucopia = 0        # Food consumption -2 TODO This should only go to 0 min aka food cost is a var not auto
+    Cornucopia = 0        # Food consumption -2
     Route_to_Mahaji = 1   # Spice sell +20
     Wooden_Statuette = 2  # Gain a Statue (+500 points per Trader and Camel)
     Canvas_Bag = 3        # Carry Weight +20
@@ -113,12 +113,12 @@ class TownOptions(IntEnum):
     Eduming = 11     # 11 - Buying trader > Interest Rate +10%
     Octoyashi = 12   # 12 - Begin with +3 Food
     Kifuai = 13      # 13 - Begin with +10 Gold
-    Skjollird = 14   # 14 - Camel cost +10 and weight +10
+    Skjollird = 14   # 14 - Camel cost +5 and weight +10
     Petrinov = 15    # 15 - Interest rate doesn't decrease
     Jilliqo = 16     # 16 - Daily Gold Income +10
     Gayawaku = 17    # 17 - Food is weightless
     Vilparino = 18   # 18 - Strange Merchant 20% Sale!
-    Sanctifan = 19   # 19 - One Free Collect Interest Action TODO - see if this doesn't use a day
+    Sanctifan = 19   # 19 - One Free Collect Interest Action
     Mehaz = 20       # 20 - Camels don't need food
     Ipartus = 21     # 21 - Silk Cost -100
 

@@ -10,25 +10,25 @@ if __name__ == '__main__':
     # Day 3
     que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Trader))
     # Day 4
-    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
+    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Trader))
     # Day 5
-    que.append(PlayerAction(GameActions.a_buy, buy_data=[18, 0, 0, 0, 0, 0]))
-    # Day 6
     que.append(PlayerAction(GameActions.a_merchant, merch_data=MerchOptions.Magic_Cleppsydra))
-    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Trader))
+    que.append(PlayerAction(GameActions.a_buy, buy_data=[11, 0, 0, 0, 0, 0]))
+    # Day 6
+    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
     # Day 7
-    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Trader))
+    que.append(PlayerAction(GameActions.a_buy, buy_data=[30, 0, 0, 0, 0, 0]))
     # Day 8
-    que.append(PlayerAction(GameActions.a_buy, buy_data=[24, 0, 0, 0, 0, 0]))
+    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Trader))
     # Day 9
-    # que.append(PlayerAction(GameActions.a_witch, witch_data=WitchOptions.Midas_was_a_Trader))
-    # que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
+    que.append(PlayerAction(GameActions.a_witch, witch_data=WitchOptions.Midas_was_a_Trader))
+    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
     # Day 10
-    # que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
+    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
     # Day 11
-    # que.append(PlayerAction(GameActions.a_buy, buy_data=[18, 1, 12, 0, 1, 1]))
+    que.append(PlayerAction(GameActions.a_buy, buy_data=[18, 1, 12, 0, 1, 1]))
     # Day 12
-    # que.append(PlayerAction(GameActions.a_sell))
+    que.append(PlayerAction(GameActions.a_sell))
     # Day 13
     # que.append(PlayerAction(GameActions.a_buy, buy_data=[27, 0, 1, 0, 0, 5]))
     # Day 14
@@ -40,4 +40,4 @@ if __name__ == '__main__':
     # Day 18
 
     solver = BruteForceSolver(100000, TownOptions.Normalia, True, True, que)
-    solver.find_solve('./hash.hash')
+    solver.find_solve()  # './hash.hash')
