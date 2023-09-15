@@ -188,7 +188,7 @@ class BruteForceSolver:
 
                 # Interest Event
                 # Lowest buy sell is *1.65 for 2 days or *1.284 per day
-                if current.interest_rate > 1.2 or current.day == current.max_day:
+                if next_day.interest_rate > 1.2 or next_day.day == next_day.max_day or next_day.quick_interest:
                     interest_event = event_interest(next_day)
                     if next_day.day < next_day.max_day:
                         if hash_on:
