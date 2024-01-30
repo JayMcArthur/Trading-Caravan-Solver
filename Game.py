@@ -1,4 +1,5 @@
-from Enums import TownOptions, PlayerAction, Items, ItemData, NPCData, NPCs, GameActions, MerchOptions, merch_options_string, WitchOptions, witch_options_string
+from Enums import TownOptions, PlayerAction, Items, ItemData, NPCData, NPCs, GameActions, MerchOptions, \
+    merch_options_string, WitchOptions, witch_options_string
 from dataclasses import replace as dc_replace
 from player import Player
 from copy import deepcopy
@@ -76,32 +77,37 @@ def apply_town(player: Player, town: TownOptions):
 
 def auto_game_loop(player: Player, event_list: list[PlayerAction]):
     for event in event_list:
-        if not player.day_start_skip:
-            player = start_of_day(player)
-        else:
-            player = dc_replace(player, day_start_skip=False)
-
-        match event.action:
-            case GameActions.a_buy:
-                player = event_buy_items(player, *event.buy_data)
-            case GameActions.a_sell:
-                player = event_sell_items(player)
-            case GameActions.a_npc:
-                player = event_buy_npc(player, event.npc_data)
-            case GameActions.a_interest:
-                player = event_interest(player)
-            case GameActions.a_merchant:
-                player = event_merchant(player, event.merch_data)
-            case GameActions.a_witch:
-                player = event_witch(player, event.witch_data)
+        player = full_day(player, event)
     return player
 
 
-def start_of_day(player: Player):
+def full_day(player: Player, event: PlayerAction):
+    if not player.day_start_skip:
+        player = start_of_day(player)
+    else:
+        player = dc_replace(player, day_start_skip=False)
+
+    match event.action:
+        case GameActions.a_buy:
+            player = event_buy_items(player, *event.buy_data)
+        case GameActions.a_sell:
+            player = event_sell_items(player)
+        case GameActions.a_npc:
+            player = event_buy_npc(player, event.npc_data)
+        case GameActions.a_interest:
+            player = event_interest(player)
+        case GameActions.a_merchant:
+            player = event_merchant(player, event.merch_data)
+        case GameActions.a_witch:
+            player = event_witch(player, event.witch_data)
+    return player
+
+
+def start_of_day(player: Player, error: bool = True):
     new_food = player.food
     if player.day != 0:
         new_food -= player.food_consumption
-        if new_food < 0:
+        if new_food < 0 and error:
             raise Exception(f'Zero Food')
     return dc_replace(player, day=player.day + 1, food=new_food)
 
@@ -112,7 +118,8 @@ def end_of_day(player: Player, action):
         c_type = "Day End"
     else:
         c_type = "Final"
-    player = dc_replace(player, gold=new_gold, actions=player.actions + [action], item_shop_hashable=str(player.item_shop), npc_shop_hashable=str(player.npc_shop))
+    player = dc_replace(player, gold=new_gold, actions=player.actions + [action],
+                        item_shop_hashable=str(player.item_shop), npc_shop_hashable=str(player.npc_shop))
     return dc_replace(player, points=check__points(player, c_type))
 
 
@@ -124,18 +131,19 @@ def find_buy(player: Player, food_needed: int, only_food: bool = False):
 
     if not only_food:
         items = [
-                [0.0, Items.Food],
-                [check__item_worth(player, Items.Spice), Items.Spice],
-                [check__item_worth(player, Items.Pottery), Items.Pottery],
-                [check__item_worth(player, Items.Marble), Items.Marble],
-                [check__item_worth(player, Items.Silk), Items.Silk],
-                [check__item_worth(player, Items.Jewelry), Items.Jewelry]
-            ]
+            [0.0, Items.Food],
+            [check__item_worth(player, Items.Spice), Items.Spice],
+            [check__item_worth(player, Items.Pottery), Items.Pottery],
+            [check__item_worth(player, Items.Marble), Items.Marble],
+            [check__item_worth(player, Items.Silk), Items.Silk],
+            [check__item_worth(player, Items.Jewelry), Items.Jewelry]
+        ]
         items.sort(key=lambda x: x[0], reverse=True)
         for [value, item] in items:
             if item == Items.Food:
                 continue
-            while weight_left >= player.item_shop[item][ItemData.weight] and gold_left >= player.item_shop[item][ItemData.buy]:
+            while weight_left >= player.item_shop[item][ItemData.weight] and gold_left >= player.item_shop[item][
+                ItemData.buy]:
                 weight_left -= player.item_shop[item][ItemData.weight]
                 gold_left -= player.item_shop[item][ItemData.buy]
                 what_to_buy[item] += 1
@@ -161,7 +169,8 @@ def event_buy_items(player: Player, food, spice, pottery, marble, silk, jewelry)
     new_silk = player.silk + silk
     new_jewelry = player.jewelry + jewelry
 
-    player = dc_replace(player, bought_last=True, gold=new_gold, food=new_food, spice=new_spice, pottery=new_pottery, marble=new_marble, silk=new_silk, jewelry=new_jewelry)
+    player = dc_replace(player, bought_last=True, gold=new_gold, food=new_food, spice=new_spice, pottery=new_pottery,
+                        marble=new_marble, silk=new_silk, jewelry=new_jewelry)
     action = f"{player.day}: Buy [{food}, {spice}, {pottery}, {marble}, {silk}, {jewelry}]"
     return end_of_day(player, action)
 
@@ -174,7 +183,8 @@ def event_sell_items(player: Player):
             player.silk * player.item_shop[Items.Silk][ItemData.sell] +
             player.jewelry * player.item_shop[Items.Jewelry][ItemData.sell] +
             player.hand_of_midas * 100)
-    player = dc_replace(player, bought_last=False, gold=new_gold, spice=0, pottery=0, marble=0, silk=0, jewelry=0, fang_mo_pot=0)
+    player = dc_replace(player, bought_last=False, gold=new_gold, spice=0, pottery=0, marble=0, silk=0, jewelry=0,
+                        fang_mo_pot=0)
     action = f"{player.day}: Sell"
     return end_of_day(player, action)
 
@@ -184,12 +194,14 @@ def event_buy_npc(player: Player, selection):
         new_gold = player.gold - player.npc_shop[NPCs.Trader][NPCData.cost]
         new_consumption = player.food_consumption + player.npc_shop[NPCs.Trader][NPCData.eat]
         new_interest = player.interest_rate + player.trader_interest * 0.1
-        player = dc_replace(player, bought_last=False, gold=new_gold, trader=player.trader + 1, interest_rate=new_interest, food_consumption=new_consumption)
+        player = dc_replace(player, bought_last=False, gold=new_gold, trader=player.trader + 1,
+                            interest_rate=new_interest, food_consumption=new_consumption)
         action = f"{player.day}: Trader"
     elif selection == NPCs.Camel and player.gold >= player.npc_shop[NPCs.Camel][NPCData.cost]:
         new_gold = player.gold - player.npc_shop[NPCs.Camel][NPCData.cost]
         new_consumption = player.food_consumption + player.npc_shop[NPCs.Camel][NPCData.eat]
-        player = dc_replace(player, bought_last=False, gold=new_gold, camel=player.camel + 1, food_consumption=new_consumption)
+        player = dc_replace(player, bought_last=False, gold=new_gold, camel=player.camel + 1,
+                            food_consumption=new_consumption)
         action = f"{player.day}: Camel"
     else:
         return None
@@ -201,12 +213,15 @@ def event_interest(player: Player):
     new_interest = player.interest_rate
     if not (player.set_interest or player.quick_interest):
         new_interest = max(0.1, new_interest - 0.1)
-    player = dc_replace(player, bought_last=False, gold=new_gold, interest_rate=new_interest)
+    player = dc_replace(player, gold=new_gold, interest_rate=new_interest)
 
     if not player.quick_interest:
+        player = dc_replace(player, bought_last=False)
         action = f"{player.day}: Interest"
         return end_of_day(player, action)
-    return dc_replace(player, day_start_skip=True, quick_interest=False, actions=player.actions + [f"{player.day}: Quick Interest"])
+    # TODO this should update points
+    return dc_replace(player, day_start_skip=True, quick_interest=False,
+                      actions=player.actions + [f"{player.day}: Quick Interest"], )
 
 
 def event_merchant(player: Player, selection: MerchOptions):
@@ -215,87 +230,116 @@ def event_merchant(player: Player, selection: MerchOptions):
             if player.gold >= 25 - (5 * player.merch_discount):
                 new_gold = player.gold - (25 - (5 * player.merch_discount))
                 new_consumption = max(player.food_consumption - 2, 0)
-                return dc_replace(player, merchant_happened=True, gold=new_gold, food_consumption=new_consumption, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold, food_consumption=new_consumption,
+                                  day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
         case MerchOptions.Route_to_Mahaji:  # Spice is worth $20 more
             if player.gold >= 25 - (5 * player.merch_discount):
                 new_gold = player.gold - (25 - (5 * player.merch_discount))
                 item_data = deepcopy(player.item_shop)
                 item_data[Items.Spice][ItemData.sell] += 20
-                return dc_replace(player, merchant_happened=True, gold=new_gold, item_shop=item_data, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold, item_shop=item_data,
+                                  day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
         case MerchOptions.Wooden_Statuette:  # +1 Statue (aka +500 per Trader and Camel)
             if player.gold >= 25 - (5 * player.merch_discount):
                 new_gold = player.gold - (25 - (5 * player.merch_discount))
-                return dc_replace(player, merchant_happened=True, gold=new_gold, statue=True, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold, statue=True, day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
         case MerchOptions.Canvas_Bag:  # +20 storage
             if player.gold >= 50 - (10 * player.merch_discount):
                 new_gold = player.gold - (50 - (10 * player.merch_discount))
-                return dc_replace(player, merchant_happened=True, gold=new_gold, backpack=player.backpack + 20, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold, backpack=player.backpack + 20,
+                                  day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
         case MerchOptions.Leaders_Necklace:  # +1 Trader
             if player.gold >= 50 - (10 * player.merch_discount):
                 new_gold = player.gold - (50 - (10 * player.merch_discount))
                 new_interest = player.interest_rate + player.trader_interest * 0.1
-                return dc_replace(player, merchant_happened=True, gold=new_gold, trader=player.trader + 1, interest_rate=new_interest, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold, trader=player.trader + 1,
+                                  interest_rate=new_interest, day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
         case MerchOptions.Hand_of_Midas:  # 100g when you sell everything
             if player.gold >= 50 - (10 * player.merch_discount):
                 new_gold = player.gold - (50 - (10 * player.merch_discount))
-                return dc_replace(player, merchant_happened=True, gold=new_gold, hand_of_midas=True, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold, hand_of_midas=True,
+                                  day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
         case MerchOptions.Sturdy_Saddle:  # Camels carry an extra 20
             if player.gold >= 100 - (20 * player.merch_discount):
                 new_gold = player.gold - (100 - (20 * player.merch_discount))
                 npc_data = deepcopy(player.npc_shop)
                 npc_data[NPCs.Camel][NPCData.effect] += 20
-                return dc_replace(player, merchant_happened=True, gold=new_gold, npc_shop=npc_data, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold, npc_shop=npc_data, day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
         case MerchOptions.Magic_Cleppsydra:  # 1 more day to trade
             if player.gold >= 100 - (20 * player.merch_discount):
                 new_gold = player.gold - (100 - (20 * player.merch_discount))
-                return dc_replace(player, merchant_happened=True, gold=new_gold, max_day=player.max_day + 1, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold, max_day=player.max_day + 1,
+                                  day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
         case MerchOptions.Blue_Treasure:  # An extra 20% from saving
             if player.gold >= 100 - (20 * player.merch_discount):
                 new_gold = player.gold - (100 - (20 * player.merch_discount))
-                return dc_replace(player, merchant_happened=True, gold=new_gold, interest_rate=player.interest_rate + 0.2, day_start_skip=True, actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                return dc_replace(player, merchant_happened=True, gold=new_gold,
+                                  interest_rate=player.interest_rate + 0.2, day_start_skip=True,
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
 
 
 def event_witch(player: Player, selection: WitchOptions):
     match selection:
-        case WitchOptions.Presents_Gift:  # +20 weight, -20% Saving  # TODO min 10% saving
+        case WitchOptions.Presents_Gift:  # +20 weight, -20% Saving
             new_interest = max(player.interest_rate - 0.2, 0.1)
-            return dc_replace(player, witch_happened=True, backpack=player.backpack + 20, interest_rate=new_interest, day_start_skip=True, actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+            return dc_replace(player, witch_happened=True, backpack=player.backpack + 20, interest_rate=new_interest,
+                              day_start_skip=True,
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
         case WitchOptions.Vertue_of_Patience:  # Saving doesn't decrease, +100 Jewelry cost
             item_data = deepcopy(player.item_shop)
             item_data[Items.Jewelry][ItemData.buy] += 100
-            return dc_replace(player, witch_happened=True, set_interest=True, item_shop=item_data, day_start_skip=True, actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+            return dc_replace(player, witch_happened=True, set_interest=True, item_shop=item_data, day_start_skip=True,
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
         case WitchOptions.Midas_was_a_Trader:  # +150 Trader earn, -300 Marble sell
             npc_data = deepcopy(player.npc_shop)
             npc_data[NPCs.Trader][NPCData.effect] += 150
             item_data = deepcopy(player.item_shop)
             item_data[Items.Marble][ItemData.sell] = 0
-            return dc_replace(player, witch_happened=True, npc_shop=npc_data, item_shop=item_data, day_start_skip=True, actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+            return dc_replace(player, witch_happened=True, npc_shop=npc_data, item_shop=item_data, day_start_skip=True,
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
         case WitchOptions.Camelization:  # +10 Camel weight, +1 Camel food cost
             npc_data = deepcopy(player.npc_shop)
             npc_data[NPCs.Camel][NPCData.effect] += 10
             new_consumption = player.food_consumption
-            if npc_data[NPCs.Camel][NPCData.eat] != 0:
-                new_consumption += npc_data[NPCs.Camel][NPCData.eat]
+            new_consumption += npc_data[NPCs.Camel][NPCData.eat] * player.camel
             npc_data[NPCs.Camel][NPCData.eat] *= 2
-            return dc_replace(player, witch_happened=True, npc_shop=npc_data, day_start_skip=True, food_consumption=new_consumption, actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+            return dc_replace(player, witch_happened=True, npc_shop=npc_data, day_start_skip=True,
+                              food_consumption=new_consumption,
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
         case WitchOptions.Time_is_Money:  # +1 Day, - 500 Jewelry sell
             item_data = deepcopy(player.item_shop)
             item_data[Items.Jewelry][ItemData.sell] -= 500
-            return dc_replace(player, witch_happened=True, item_shop=item_data, max_day=player.max_day + 1, day_start_skip=True, actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+            return dc_replace(player, witch_happened=True, item_shop=item_data, max_day=player.max_day + 1,
+                              day_start_skip=True,
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
         case WitchOptions.Animal_Lover:  # +2 Camels, -1 Day
-            return dc_replace(player, witch_happened=True, max_day=player.max_day - 1, camel=player.camel + 2, day_start_skip=True, actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+            # todo these need to eat?
+            return dc_replace(player, witch_happened=True, max_day=player.max_day - 1, camel=player.camel + 2,
+                              day_start_skip=True,
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
         case WitchOptions.Oasis_of_Sanctifan:  # Crew don't eat, +200 Silk buy
             npc_data = deepcopy(player.npc_shop)
             npc_data[NPCs.Trader][NPCData.eat] = 0
             npc_data[NPCs.Camel][NPCData.eat] = 0
             item_data = deepcopy(player.item_shop)
             item_data[Items.Silk][ItemData.buy] += 200
-            return dc_replace(player, witch_happened=True, npc_shop=npc_data, item_shop=item_data, food_consumption=0, day_start_skip=True, actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+            return dc_replace(player, witch_happened=True, npc_shop=npc_data, item_shop=item_data, food_consumption=0,
+                              day_start_skip=True,
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
         case WitchOptions.The_Stonecutter:  # -15 Marble weight, +60 Marble cost
             item_data = deepcopy(player.item_shop)
             item_data[Items.Marble][ItemData.weight] -= 15
             item_data[Items.Marble][ItemData.buy] += 60
-            return dc_replace(player, witch_happened=True, item_shop=item_data, day_start_skip=True, actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+            return dc_replace(player, witch_happened=True, item_shop=item_data, day_start_skip=True,
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
 
 
 def check__has_items(player: Player):

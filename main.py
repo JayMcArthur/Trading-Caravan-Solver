@@ -1,5 +1,6 @@
 from Enums import GameActions, PlayerAction, NPCs, MerchOptions, WitchOptions, TownOptions
 from GameSolver import BruteForceSolver
+from GASover import GeneticAlgorithmSolver
 
 if __name__ == '__main__':
     que = []
@@ -24,11 +25,11 @@ if __name__ == '__main__':
     que.append(PlayerAction(GameActions.a_witch, witch_data=WitchOptions.Midas_was_a_Trader))
     que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
     # Day 10
-    que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
+    # que.append(PlayerAction(GameActions.a_npc, npc_data=NPCs.Camel))
     # Day 11
-    que.append(PlayerAction(GameActions.a_buy, buy_data=[18, 1, 12, 0, 1, 1]))
+    # que.append(PlayerAction(GameActions.a_buy, buy_data=[18, 1, 12, 0, 1, 1]))
     # Day 12
-    que.append(PlayerAction(GameActions.a_sell))
+    # que.append(PlayerAction(GameActions.a_sell))
     # Day 13
     # que.append(PlayerAction(GameActions.a_buy, buy_data=[27, 0, 1, 0, 0, 5]))
     # Day 14
@@ -39,5 +40,7 @@ if __name__ == '__main__':
     # Day 17
     # Day 18
 
-    solver = BruteForceSolver(100000, TownOptions.Normalia, True, True, que)
-    solver.find_solve()  # './hash.hash')
+    # solver = BruteForceSolver(100000, TownOptions.Normalia, True, True, que)
+    # solver.find_solve()  # './hash.hash')
+
+    solver = GeneticAlgorithmSolver(TownOptions.Normalia, True, True, que)
