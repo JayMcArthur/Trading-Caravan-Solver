@@ -33,7 +33,7 @@ class MerchOptions(IntEnum):
     Wooden_Statuette = 2  # Gain a Statue (+500 points per Trader and Camel)
     Canvas_Bag = 3        # Carry Weight +20
     Leaders_Necklace = 4  # Gain one Trader
-    Hand_of_Midas = 5     # When you sell everything > Gold +100
+    Hand_of_Midas = 5     # When you sell everything -> Gold +100
     Sturdy_Saddle = 6     # Camels weight +20
     Magic_Cleppsydra = 7  # Max Day +1
     Blue_Treasure = 8     # Interest Rate +20%
@@ -110,7 +110,7 @@ class TownOptions(IntEnum):
     Port_Willam = 8  # 08 - Carry Weight +15
     Moonin = 9       # 09 - Call Merchant at anytime
     Cornecopea = 10  # 10 - Food is free
-    Eduming = 11     # 11 - Buying trader > Interest Rate +10%
+    Eduming = 11     # 11 - Buying trader -> Interest Rate +10%
     Octoyashi = 12   # 12 - Begin with +3 Food
     Kifuai = 13      # 13 - Begin with +10 Gold
     Skjollird = 14   # 14 - Camel cost +5 and weight +10

@@ -123,6 +123,7 @@ def end_of_day(player: Player, action):
     return dc_replace(player, points=check__points(player, c_type))
 
 
+# TODO - This needs to be double checked
 def find_buy(player: Player, food_needed: int, only_food: bool = False):
     # Food, Spice, Pottery, Marble, Silk, Jewelry
     what_to_buy = [food_needed, 0, 0, 0, 0, 0]

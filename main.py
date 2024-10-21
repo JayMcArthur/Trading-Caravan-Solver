@@ -1,6 +1,7 @@
-from Enums import GameActions, PlayerAction, NPCs, MerchOptions, WitchOptions, TownOptions
+from Enums import GameActions, PlayerAction, NPCs, MerchOptions, WitchOptions, TownOptions, town_options_string
 from GameSolver import BruteForceSolver
 from GASover import GeneticAlgorithmSolver
+from pathlib import Path
 
 if __name__ == '__main__':
     que = []
@@ -40,7 +41,17 @@ if __name__ == '__main__':
     # Day 17
     # Day 18
 
-    # solver = BruteForceSolver(100000, TownOptions.Normalia, True, True, que)
-    # solver.find_solve()  # './hash.hash')
+    que = []
+    limit = 100000
+    town = TownOptions.Normalia
+    merch = True
+    witch = True
 
-    solver = GeneticAlgorithmSolver(TownOptions.Normalia, True, True, que)
+    solver = BruteForceSolver(limit,town, merch, witch, que=[])
+    if len(que) > 0:
+        solver.find_solve()
+    else:
+        Path(f'./hashes/{town_options_string[town]}_{merch}_{witch}').mkdir(parents=True, exist_ok=True)
+        solver.find_solve(f'./hashes/{town_options_string[town]}_{merch}_{witch}')
+
+    # solver = GeneticAlgorithmSolver(TownOptions.Normalia, True, True, que)
