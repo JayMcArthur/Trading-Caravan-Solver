@@ -1,0 +1,97 @@
+pip install stable-baselines3[extra] gym
+
+import gym
+from gym import spaces
+import numpy as np
+import TCSC
+
+class TradingCaravanEnv(gym.Env):
+    def __init__(self):
+        super(TradingCaravanEnv, self).__init__()
+        self.solver = TCSC.AISolver()
+
+        # Define action and observation spaces
+        # Assuming there are 7 possible actions
+        self.action_space = spaces.Discrete(7)
+
+        # Observation space: a vector of state features (normalize as needed)
+        self.observation_space = spaces.Box(low=0, high=np.inf, shape=(16,), dtype=np.float32)
+
+    def reset(self):
+        self.solver.reset()
+        state = self.solver.get_current_state()
+        return self._convert_state(state)
+
+    def step(self, action):
+        self.solver.step(action)
+        done = self.solver.is_done()
+
+        # Get the next state and reward
+        state = self.solver.get_current_state()
+        reward = self.solver.calculate_final_score() if done else 0
+
+        return self._convert_state(state), reward, done, {}
+
+    def _convert_state(self, state):
+        """
+        Convert the state dictionary to a numpy array.
+        Adjust this based on your state dictionary.
+        """
+        return np.array([
+            state["gold"],
+            state["food"],
+            state["items"],
+            state["traders"],
+            state["camels"],
+            state["food_consumption"],
+            state["backpack"],
+            state["daily_income"],
+            state["interest_rate"],
+            state["set_interest"],
+            state["quick_interest"],
+            state["statue"],
+            state["hand_of_midas"],
+            state["trader_interest"],
+            state["day"],
+            state["points"],
+        ], dtype=np.float32)
+
+from stable_baselines3 import PPO
+from gym_solver_env import TradingCaravanEnv
+
+# Create the environment
+env = TradingCaravanEnv()
+
+# Create the PPO model
+model = PPO("MlpPolicy", env, verbose=1)
+
+# Train the model
+model.learn(total_timesteps=10000)
+
+# Save the trained model
+model.save("trading_caravan_model")
+
+from stable_baselines3 import PPO
+from gym_solver_env import TradingCaravanEnv
+
+# Load the trained model
+model = PPO.load("trading_caravan_model")
+
+# Create the environment
+env = TradingCaravanEnv()
+
+# Evaluate the agent
+obs = env.reset()
+done = False
+total_reward = 0
+
+while not done:
+    action, _states = model.predict(obs, deterministic=True)
+    obs, reward, done, info = env.step(action)
+    total_reward += reward
+
+print(f"Total Reward: {total_reward}")
+
+python3 train_agent.py
+
+python3 evaluate_agent.py

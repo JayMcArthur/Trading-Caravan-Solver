@@ -107,13 +107,14 @@ class BruteForceSolver:
             if next_day.day < next_day.max_day and next_day.bought_last is False:
                 days_left = next_day.max_day - next_day.day
                 food_multi = 2 if days_left > 1 else 1
-                # Max you can Afford
-                max_food = min(next_day.gold // max(next_day.item_shop[Items.Food][ItemData.buy], 1),
-                               # Max you can carry
-                               check__weight_left(next_day) // max(next_day.item_shop[Items.Food][ItemData.weight], 1),
-                               # Max you could need? TODO REWORK
-                               current_food_cost * days_left + 2 * (days_left - 1))
 
+                max_weight = 100 if next_day.item_shop[Items.Food][ItemData.weight] == 0 else  check__weight_left(next_day) // next_day.item_shop[Items.Food][ItemData.weight]
+                max_afford = 100 if next_day.item_shop[Items.Food][ItemData.buy] == 0 else next_day.gold // next_day.item_shop[Items.Food][ItemData.buy]
+                max_eat = max(next_day.npc_shop[NPCs.Trader][NPCData.eat], next_day.npc_shop[NPCs.Camel][NPCData.eat])
+                future_days = max(days_left - 1, 0)
+                max_want = (current_food_cost * days_left) + (max_eat * (future_days * (future_days + 1))/2)
+
+                max_food = min(max_weight, max_afford, max_want)
                 needed_food = max(0, food_multi * current_food_cost - next_day.food)
 
                 for i in range(needed_food, max_food):

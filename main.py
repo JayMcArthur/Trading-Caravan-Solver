@@ -1,7 +1,11 @@
+from Xlib.Xcursorfont import diamond_cross
+
 from Enums import GameActions, PlayerAction, NPCs, MerchOptions, WitchOptions, TownOptions, town_options_string
 from GameSolver import BruteForceSolver
 from GASover import GeneticAlgorithmSolver
 from pathlib import Path
+
+
 
 if __name__ == '__main__':
     que = []
@@ -53,5 +57,7 @@ if __name__ == '__main__':
     else:
         Path(f'./hashes/{town_options_string[town]}_{merch}_{witch}').mkdir(parents=True, exist_ok=True)
         solver.find_solve(f'./hashes/{town_options_string[town]}_{merch}_{witch}')
+        # Hash makes way to many files and takes to long to save that many
+        # Also hash collision problems
 
     # solver = GeneticAlgorithmSolver(TownOptions.Normalia, True, True, que)

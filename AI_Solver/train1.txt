@@ -1,0 +1,89 @@
+pip install stable-baselines3 gym numpy
+
+import gym
+from gym import spaces
+import numpy as np
+import TCSC
+
+class TradingCaravanEnv(gym.Env):
+    def __init__(self):
+        super(TradingCaravanEnv, self).__init__()
+        self.solver = TCSC.AISolver()
+
+        # Define action space: [1, 2, 3, 4, 5, 6, 7]
+        self.action_space = spaces.Discrete(7)
+
+        # Define observation space: assuming some state features are bounded
+        self.observation_space = spaces.Dict({
+            "gold": spaces.Box(low=0, high=1000, shape=(), dtype=np.int32),
+            "food": spaces.Box(low=0, high=100, shape=(), dtype=np.int32),
+            "day": spaces.Box(low=0, high=100, shape=(), dtype=np.int32),
+            "max_day": spaces.Box(low=1, high=100, shape=(), dtype=np.int32),
+            "points": spaces.Box(low=0, high=1000, shape=(), dtype=np.int32),
+        })
+
+    def reset(self):
+        """Reset the environment to its initial state."""
+        self.solver.reset()
+        state = self.solver.get_current_state()
+        return self._process_state(state)
+
+    def step(self, action):
+        """Perform one step in the environment."""
+        self.solver.step(action)
+        state = self.solver.get_current_state()
+        done = not self.solver.is_done()
+        reward = 0
+        if done:
+            reward = self.solver.calculate_final_score()
+        return self._process_state(state), reward, done, {}
+
+    def _process_state(self, state):
+        """Convert the C++ state dict into a Gym-compatible format."""
+        return {
+            "gold": state["gold"],
+            "food": state["food"],
+            "day": state["day"],
+            "max_day": state["max_day"],
+            "points": state["points"]
+        }
+
+from stable_baselines3 import DQN
+from env_wrapper import TradingCaravanEnv
+
+# Create the environment
+env = TradingCaravanEnv()
+
+# Create the DQN model
+model = DQN("MultiInputPolicy", env, verbose=1, learning_rate=0.001, buffer_size=10000)
+
+# Train the model
+model.learn(total_timesteps=100000)
+
+# Save the model
+model.save("dqn_trading_caravan")
+
+# Close the environment
+env.close()
+
+from stable_baselines3 import DQN
+from env_wrapper import TradingCaravanEnv
+
+# Load the trained model
+model = DQN.load("dqn_trading_caravan")
+
+# Create the environment
+env = TradingCaravanEnv()
+obs = env.reset()
+
+done = False
+while not done:
+    action, _ = model.predict(obs, deterministic=True)
+    obs, reward, done, info = env.step(action)
+    print(f"Action: {action}, Reward: {reward}, State: {obs}")
+
+env.close()
+
+python3 train_agent.py
+
+python3 test_agent.py

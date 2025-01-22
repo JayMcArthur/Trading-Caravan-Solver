@@ -10,68 +10,68 @@ def apply_town(player: Player, town: TownOptions):
         case TownOptions.Normalia:  # 00 - No Effect
             pass
         case TownOptions.Fang_Mo:  # 01 - Begin with 1 Pottery
-            player = dc_replace(player, fang_mo_pot=1)
+            player = dc_replace(player, fang_mo_pot=1, world="1_0_0")
         case TownOptions.L_Exquise:  # 02 - Traders don't need Food
             npc_data = deepcopy(player.npc_shop)
             consumption = player.food_consumption - (npc_data[NPCs.Trader][NPCData.eat] * player.trader)
             npc_data[NPCs.Trader][NPCData.eat] = 0
-            player = dc_replace(player, npc_shop=npc_data, food_consumption=consumption)
+            player = dc_replace(player, npc_shop=npc_data, food_consumption=consumption, world="2_0_0")
         case TownOptions.Mahaji:  # 03 - Spice sell +5
             item_data = deepcopy(player.item_shop)
             item_data[Items.Spice][ItemData.sell] += 5
-            player = dc_replace(player, item_shop=item_data)
+            player = dc_replace(player, item_shop=item_data, world="3_0_0")
         case TownOptions.Tocaccialli:  # 04 - Max Day +1
-            player = dc_replace(player, max_day=player.max_day + 1)
+            player = dc_replace(player, max_day=player.max_day + 1, world="4_0_0")
         case TownOptions.Bajaar:  # 05 - x2 Trader income
             npc_data = deepcopy(player.npc_shop)
             npc_data[NPCs.Trader][NPCData.effect] += 20
-            player = dc_replace(player, npc_shop=npc_data)
+            player = dc_replace(player, npc_shop=npc_data, world="5_0_0")
         case TownOptions.Doba_Lao:  # 06 - Interest Rate +20%
-            player = dc_replace(player, interest_rate=player.interest_rate + 0.2)
+            player = dc_replace(player, interest_rate=player.interest_rate + 0.2, world="6_0_0")
         case TownOptions.Huangoz:  # 07 - Marble Cost -20
             item_data = deepcopy(player.item_shop)
             item_data[Items.Marble][ItemData.buy] -= 20
-            player = dc_replace(player, item_shop=item_data)
+            player = dc_replace(player, item_shop=item_data, world="7_0_0")
         case TownOptions.Port_Willam:  # 08 - Carry Weight +15
-            player = dc_replace(player, backpack=player.backpack + 15)
+            player = dc_replace(player, backpack=player.backpack + 15, world="8_0_0")
         case TownOptions.Moonin:  # 09 - Call Merchant at anytime
-            player = dc_replace(player, call_merchant=True)
+            player = dc_replace(player, call_merchant=True, world="9_0_0")
         case TownOptions.Cornecopea:  # 10 - Food is free
             item_data = deepcopy(player.item_shop)
             item_data[Items.Food][ItemData.buy] = 0
-            player = dc_replace(player, item_shop=item_data)
+            player = dc_replace(player, item_shop=item_data, world="10_0_0")
         case TownOptions.Eduming:  # 11 - Buying trader > Interest Rate +10%
-            player = dc_replace(player, trader_interest=True)
+            player = dc_replace(player, trader_interest=True, world="11_0_0")
         case TownOptions.Octoyashi:  # 12 - Begin with +3 Food
-            player = dc_replace(player, food=player.food + 3)
+            player = dc_replace(player, food=player.food + 3, world="12_0_0")
         case TownOptions.Kifuai:  # 13 - Begin with +10 Gold
-            player = dc_replace(player, gold=player.gold + 10)
+            player = dc_replace(player, gold=player.gold + 10, world="13_0_0")
         case TownOptions.Skjollird:  # 14 - Camel cost +5 and weight +10
             npc_data = deepcopy(player.npc_shop)
             npc_data[NPCs.Camel][NPCData.cost] += 5
             npc_data[NPCs.Camel][NPCData.effect] += 10
-            player = dc_replace(player, npc_shop=npc_data)
+            player = dc_replace(player, npc_shop=npc_data, world="14_0_0")
         case TownOptions.Petrinov:  # 15 - Interest rate doesn't decrease
-            player = dc_replace(player, set_interest=True)
+            player = dc_replace(player, set_interest=True, world="15_0_0")
         case TownOptions.Jilliqo:  # 16 - Daily Gold Income +10
-            player = dc_replace(player, daily_income=player.daily_income + 10)
+            player = dc_replace(player, daily_income=player.daily_income + 10, world="16_0_0")
         case TownOptions.Gayawaku:  # 17 - Food is weightless
             item_data = deepcopy(player.item_shop)
             item_data[Items.Food][ItemData.weight] = 0
-            player = dc_replace(player, item_shop=item_data)
+            player = dc_replace(player, item_shop=item_data, world="17_0_0")
         case TownOptions.Vilparino:  # 18 - Strange Merchant 20% Sale!
-            player = dc_replace(player, merch_discount=True)
+            player = dc_replace(player, merch_discount=True, world="18_0_0")
         case TownOptions.Sanctifan:  # 19 - One Free Collect Interest Action
-            player = dc_replace(player, quick_interest=True)
+            player = dc_replace(player, quick_interest=True, world="19_0_0")
         case TownOptions.Mehaz:  # 20 - Camels don't need food
             npc_data = deepcopy(player.npc_shop)
             consumption = player.food_consumption - (npc_data[NPCs.Camel][NPCData.eat] * player.camel)
             npc_data[NPCs.Camel][NPCData.eat] = 0
-            player = dc_replace(player, npc_shop=npc_data, food_consumption=consumption)
+            player = dc_replace(player, npc_shop=npc_data, food_consumption=consumption, world="20_0_0")
         case TownOptions.Ipartus:  # 21 - Silk Cost -100
             item_data = deepcopy(player.item_shop)
             item_data[Items.Silk][ItemData.buy] -= 100
-            player = dc_replace(player, item_shop=item_data)
+            player = dc_replace(player, item_shop=item_data, world="21_0_0")
     return player
 
 
@@ -226,6 +226,8 @@ def event_interest(player: Player):
 
 
 def event_merchant(player: Player, selection: MerchOptions):
+    town, merch, witch = player.world.split("_")
+    new_world = f"{town}_{selection+1}_{witch}"
     match selection:
         case MerchOptions.Cornucopia:  # +2 food every turn
             if player.gold >= 25 - (5 * player.merch_discount):
@@ -233,7 +235,7 @@ def event_merchant(player: Player, selection: MerchOptions):
                 new_consumption = max(player.food_consumption - 2, 0)
                 return dc_replace(player, merchant_happened=True, gold=new_gold, food_consumption=new_consumption,
                                   day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
         case MerchOptions.Route_to_Mahaji:  # Spice is worth $20 more
             if player.gold >= 25 - (5 * player.merch_discount):
                 new_gold = player.gold - (25 - (5 * player.merch_discount))
@@ -241,71 +243,73 @@ def event_merchant(player: Player, selection: MerchOptions):
                 item_data[Items.Spice][ItemData.sell] += 20
                 return dc_replace(player, merchant_happened=True, gold=new_gold, item_shop=item_data,
                                   day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
         case MerchOptions.Wooden_Statuette:  # +1 Statue (aka +500 per Trader and Camel)
             if player.gold >= 25 - (5 * player.merch_discount):
                 new_gold = player.gold - (25 - (5 * player.merch_discount))
                 return dc_replace(player, merchant_happened=True, gold=new_gold, statue=True, day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
         case MerchOptions.Canvas_Bag:  # +20 storage
             if player.gold >= 50 - (10 * player.merch_discount):
                 new_gold = player.gold - (50 - (10 * player.merch_discount))
                 return dc_replace(player, merchant_happened=True, gold=new_gold, backpack=player.backpack + 20,
                                   day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
         case MerchOptions.Leaders_Necklace:  # +1 Trader
             if player.gold >= 50 - (10 * player.merch_discount):
                 new_gold = player.gold - (50 - (10 * player.merch_discount))
                 new_interest = player.interest_rate + player.trader_interest * 0.1
                 return dc_replace(player, merchant_happened=True, gold=new_gold, trader=player.trader + 1,
                                   interest_rate=new_interest, day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
         case MerchOptions.Hand_of_Midas:  # 100g when you sell everything
             if player.gold >= 50 - (10 * player.merch_discount):
                 new_gold = player.gold - (50 - (10 * player.merch_discount))
                 return dc_replace(player, merchant_happened=True, gold=new_gold, hand_of_midas=True,
                                   day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
         case MerchOptions.Sturdy_Saddle:  # Camels carry an extra 20
             if player.gold >= 100 - (20 * player.merch_discount):
                 new_gold = player.gold - (100 - (20 * player.merch_discount))
                 npc_data = deepcopy(player.npc_shop)
                 npc_data[NPCs.Camel][NPCData.effect] += 20
                 return dc_replace(player, merchant_happened=True, gold=new_gold, npc_shop=npc_data, day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
         case MerchOptions.Magic_Cleppsydra:  # 1 more day to trade
             if player.gold >= 100 - (20 * player.merch_discount):
                 new_gold = player.gold - (100 - (20 * player.merch_discount))
                 return dc_replace(player, merchant_happened=True, gold=new_gold, max_day=player.max_day + 1,
                                   day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
         case MerchOptions.Blue_Treasure:  # An extra 20% from saving
             if player.gold >= 100 - (20 * player.merch_discount):
                 new_gold = player.gold - (100 - (20 * player.merch_discount))
                 return dc_replace(player, merchant_happened=True, gold=new_gold,
                                   interest_rate=player.interest_rate + 0.2, day_start_skip=True,
-                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'])
+                                  actions=player.actions + [f'Merch - {merch_options_string[selection]}'], world=new_world)
 
 
 def event_witch(player: Player, selection: WitchOptions):
+    town, merch, witch = player.world.split("_")
+    new_world = f"{town}_{merch}_{selection+1}"
     match selection:
         case WitchOptions.Presents_Gift:  # +20 weight, -20% Saving
             new_interest = max(player.interest_rate - 0.2, 0.1)
             return dc_replace(player, witch_happened=True, backpack=player.backpack + 20, interest_rate=new_interest,
                               day_start_skip=True,
-                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'], world=new_world)
         case WitchOptions.Vertue_of_Patience:  # Saving doesn't decrease, +100 Jewelry cost
             item_data = deepcopy(player.item_shop)
             item_data[Items.Jewelry][ItemData.buy] += 100
             return dc_replace(player, witch_happened=True, set_interest=True, item_shop=item_data, day_start_skip=True,
-                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'], world=new_world)
         case WitchOptions.Midas_was_a_Trader:  # +150 Trader earn, -300 Marble sell
             npc_data = deepcopy(player.npc_shop)
             npc_data[NPCs.Trader][NPCData.effect] += 150
             item_data = deepcopy(player.item_shop)
             item_data[Items.Marble][ItemData.sell] = 0
             return dc_replace(player, witch_happened=True, npc_shop=npc_data, item_shop=item_data, day_start_skip=True,
-                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'], world=new_world)
         case WitchOptions.Camelization:  # +10 Camel weight, +1 Camel food cost
             npc_data = deepcopy(player.npc_shop)
             npc_data[NPCs.Camel][NPCData.effect] += 10
@@ -314,18 +318,18 @@ def event_witch(player: Player, selection: WitchOptions):
             npc_data[NPCs.Camel][NPCData.eat] *= 2
             return dc_replace(player, witch_happened=True, npc_shop=npc_data, day_start_skip=True,
                               food_consumption=new_consumption,
-                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'], world=new_world)
         case WitchOptions.Time_is_Money:  # +1 Day, - 500 Jewelry sell
             item_data = deepcopy(player.item_shop)
             item_data[Items.Jewelry][ItemData.sell] -= 500
             return dc_replace(player, witch_happened=True, item_shop=item_data, max_day=player.max_day + 1,
                               day_start_skip=True,
-                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'], world=new_world)
         case WitchOptions.Animal_Lover:  # +2 Camels, -1 Day
             # todo these need to eat?
             return dc_replace(player, witch_happened=True, max_day=player.max_day - 1, camel=player.camel + 2,
                               day_start_skip=True,
-                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'], world=new_world)
         case WitchOptions.Oasis_of_Sanctifan:  # Crew don't eat, +200 Silk buy
             npc_data = deepcopy(player.npc_shop)
             npc_data[NPCs.Trader][NPCData.eat] = 0
@@ -334,13 +338,13 @@ def event_witch(player: Player, selection: WitchOptions):
             item_data[Items.Silk][ItemData.buy] += 200
             return dc_replace(player, witch_happened=True, npc_shop=npc_data, item_shop=item_data, food_consumption=0,
                               day_start_skip=True,
-                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'], world=new_world)
         case WitchOptions.The_Stonecutter:  # -15 Marble weight, +60 Marble cost
             item_data = deepcopy(player.item_shop)
             item_data[Items.Marble][ItemData.weight] -= 15
             item_data[Items.Marble][ItemData.buy] += 60
             return dc_replace(player, witch_happened=True, item_shop=item_data, day_start_skip=True,
-                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'])
+                              actions=player.actions + [f'Witch - {witch_options_string[selection]}'], world=new_world)
 
 
 def check__has_items(player: Player):

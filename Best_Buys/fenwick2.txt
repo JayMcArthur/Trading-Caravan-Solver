@@ -1,0 +1,58 @@
+from bisect import bisect_right
+
+class FenwickTree2D:
+    def __init__(self, max_x, max_y):
+        self.max_x = max_x
+        self.max_y = max_y
+        # Initialize the tree with tuples: (value, (x, y))
+        self.tree = [[(float('-inf'), None)] * (max_y + 1) for _ in range(max_x + 1)]
+
+    def update(self, x, y, value, original_x, original_y):
+        xi = x
+        while xi <= self.max_x:
+            yi = y
+            while yi <= self.max_y:
+                current_value, _ = self.tree[xi][yi]
+                # Update if the new value is greater
+                if value > current_value:
+                    self.tree[xi][yi] = (value, (original_x, original_y))
+                yi += yi & -yi  # Move to next parent in Y
+            xi += xi & -xi  # Move to next parent in X
+
+    def query(self, x, y):
+        max_value = float('-inf')
+        best_coordinates = None
+        xi = x
+        while xi > 0:
+            yi = y
+            while yi > 0:
+                current_value, coordinates = self.tree[xi][yi]
+                if current_value > max_value:
+                    max_value = current_value
+                    best_coordinates = coordinates
+                yi -= yi & -yi  # Move to previous parent in Y
+            xi -= xi & -xi  # Move to previous parent in X
+        return best_coordinates
+
+def preprocess_and_query(elements, queries):
+    # Normalize X and Y
+    xs = sorted(set(e[0] for e in elements))
+    ys = sorted(set(e[1] for e in elements))
+    x_to_idx = {x: i + 1 for i, x in enumerate(xs)}
+    y_to_idx = {y: i + 1 for i, y in enumerate(ys)}
+
+    # Create Fenwick Tree
+    fenwick = FenwickTree2D(len(xs), len(ys))
+
+    # Insert elements into the Fenwick Tree
+    for x, y, value in elements:
+        fenwick.update(x_to_idx[x], y_to_idx[y], value, x, y)
+
+    # Query the Fenwick Tree
+    results = []
+    for q_x, q_y in queries:
+        norm_q_x = bisect_right(xs, q_x)
+        norm_q_y = bisect_right(ys, q_y)
+        results.append(fenwick.query(norm_q_x, norm_q_y))
+
+    return results

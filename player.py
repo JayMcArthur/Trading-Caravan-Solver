@@ -53,3 +53,4 @@ class Player:
     bought_last: bool = field(default=False, compare=False, hash=False, repr=False)
     actions: list[str] = field(default_factory=list, compare=False, hash=False, repr=False)
     points: int = field(default=0, compare=False, hash=False, repr=False)
+    world: str = field(default="0_0_0", compare=False, hash=False, repr=False)
