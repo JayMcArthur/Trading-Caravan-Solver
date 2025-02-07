@@ -1,0 +1,2 @@
+#!/bin/bash
+c++ -O3 -Wall -shared -std=c++17 -fPIC -DBUILD_PYTHON_MODULE $(python3 -m pybind11 --includes) TCSC.cpp Game.cpp Game.h player.h enums.h BestPurchaseHandler.cpp BestPurchaseHandler.h FenwickTree2D.cpp FenwickTree2D.h -o TCSC.so
