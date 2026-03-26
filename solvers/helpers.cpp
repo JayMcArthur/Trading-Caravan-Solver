@@ -5,6 +5,18 @@
 #include "helpers.h"
 #include "../game/Game.h"
 #include <algorithm>
+#include <unordered_set>
+
+namespace {
+uint64_t encode_buy(const buy_list& buy) {
+    return static_cast<uint64_t>(buy.food) |
+           (static_cast<uint64_t>(buy.spice) << 8U) |
+           (static_cast<uint64_t>(buy.pottery) << 16U) |
+           (static_cast<uint64_t>(buy.marble) << 24U) |
+           (static_cast<uint64_t>(buy.silk) << 32U) |
+           (static_cast<uint64_t>(buy.jewelry) << 40U);
+}
+}
 
 void Helpers::run_merchant_event(Player& current, std::deque<Player>& list) {
     for (auto event : ALL_MERCH_OPTIONS) {
@@ -25,7 +37,8 @@ void Helpers::run_witch_event(Player& current, std::deque<Player>& list) {
     }
 }
 
-void Helpers::run_buy_event(Player& current, std::deque<Player>& list, BestPurchaseHandler& handler) {
+BuyEventStats Helpers::run_buy_event(Player& current, std::deque<Player>& list, BestPurchaseHandler& handler) {
+    BuyEventStats stats;
     const int current_food_cost = current.food_consumption;
     const int days_left = current.max_day - current.day;
     const int food_multi = days_left > 1 ? 2 : 1; // Would buy for today and tomorrow or no point
@@ -38,18 +51,43 @@ void Helpers::run_buy_event(Player& current, std::deque<Player>& list, BestPurch
 
     const int max_food = std::min({max_weight, max_afford, max_want});
     int needed_food = std::max(0, (food_multi * current_food_cost) - current.food);
+    if (max_food >= needed_food) {
+        stats.food_range_total = static_cast<uint64_t>(max_food - needed_food + 1);
+        stats.max_food_range = max_food - needed_food + 1;
+        stats.max_food_min = needed_food;
+        stats.max_food_max = max_food;
+        stats.widest_range_day = current.day;
+    }
+    std::unordered_set<uint64_t> emitted_buys;
+    emitted_buys.reserve(static_cast<size_t>((max_food - needed_food + 1) * 2));
 
     // TODO -- Find some way to cut this search space
     for (; needed_food <= max_food; ++needed_food) {
-        list.emplace_back(current);
-        Player& to_buy_everything = list.back();
-        find_buy(to_buy_everything, needed_food, false, handler);
-        if (check__valid_only_food(needed_food + current.food, max_eat, min_eat, current_food_cost)) {
+        ++stats.best_buy_queries;
+        buy_list best_buy = find_buy(current, needed_food, false, handler);
+        if (emitted_buys.insert(encode_buy(best_buy)).second) {
             list.emplace_back(current);
-            Player& to_buy_food = list.back();
-            find_buy(to_buy_food, needed_food, true, handler);
+            Player& to_buy_everything = list.back();
+            Game::event_buy_items(to_buy_everything, best_buy);
+            ++stats.emitted_states;
+        } else {
+            ++stats.duplicate_emits;
+        }
+
+        ++stats.food_only_checks;
+        if (check__valid_only_food(needed_food + current.food, max_eat, min_eat, current_food_cost)) {
+            buy_list food_only_buy = find_buy(current, needed_food, true, handler);
+            if (emitted_buys.insert(encode_buy(food_only_buy)).second) {
+                list.emplace_back(current);
+                Player& to_buy_food = list.back();
+                Game::event_buy_items(to_buy_food, food_only_buy);
+                ++stats.emitted_states;
+            } else {
+                ++stats.duplicate_emits;
+            }
         }
     }
+    return stats;
 }
 
 void Helpers::run_sell_event(Player& current, std::deque<Player>& list, std::set<Player>& final) {
@@ -90,7 +128,7 @@ void Helpers::run_interest_event(Player& current, std::deque<Player>& list, std:
     }
 }
 
-void Helpers::find_buy(Player &player, const int &food_needed, const bool &only_food, BestPurchaseHandler& handler) {
+buy_list Helpers::find_buy(const Player& player, const int& food_needed, const bool& only_food, BestPurchaseHandler& handler) {
     buy_list what_to_buy = buy_list(food_needed, 0, 0, 0, 0, 0);
     int gold_left = player.gold - (player.item_shop[i_Food][id_Buy] * food_needed);
     int weight_left = Game::check_weight_left(player) - (player.item_shop[i_Food][id_Weight] * food_needed);
@@ -101,12 +139,15 @@ void Helpers::find_buy(Player &player, const int &food_needed, const bool &only_
         what_to_buy = profit.second;
         what_to_buy.food = food_needed;
     }
-
-    Game::event_buy_items(player, what_to_buy);
+    return what_to_buy;
 }
 
 bool Helpers::check__valid_only_food(int want_food, const int& max_eat, const int& min_eat, const int& daily_food) {
     // TODO - This + Run Buy event need to be remade
+    if (daily_food <= 0) {
+        return want_food == 0;
+    }
+
     int count = 0;
     while (want_food >= 2*daily_food) {
         want_food -= daily_food;

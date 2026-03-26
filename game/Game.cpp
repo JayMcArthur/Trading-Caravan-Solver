@@ -144,13 +144,6 @@ void Game::start_of_day(Player &player) {
         player.food -= player.food_consumption;
         /*
         if (player.food < 0) {
-            for (const auto & action : player.actions) {
-                if (&action != &player.actions.front()) [[likely]] {
-                    std::cout << ", "<<  action ;
-                } else [[unlikely]]{
-                    std::cout <<  action;
-                }
-            }
             throw negative_food_error();
         }
         */
@@ -161,7 +154,7 @@ void Game::start_of_day(Player &player) {
 void Game::end_of_day(Player &player, const std::string &action) {
     std::string type;
     player.gold += player.daily_income + player.trader * player.npc_shop[n_Trader][nd_Effect];
-    player.actions.emplace_back(std::to_string(player.day) + ": " + action);
+    player.last_action = std::to_string(player.day) + ": " + action;
     if (player.day == player.max_day) {
         type = "Final";
     } else {
@@ -232,7 +225,7 @@ void Game::event_buy_npc(Player &player, const npcs &selection) {
 
 void Game::event_interest(Player &player) {
     // TODO -- double check that rounding always matches
-    player.gold = (int)round(player.interest_rate * (player.gold + 0.25));
+    player.gold = (int)round((player.interest_rate * player.gold) + 0.25);
     if (not (player.set_interest || player.quick_interest)) {
         player.interest_rate = std::max(player.interest_rate - 0.1, 0.1);
     }
@@ -243,7 +236,7 @@ void Game::event_interest(Player &player) {
     } else {
         player.day_start_skip = true;
         player.quick_interest = false;
-        player.actions.emplace_back(std::to_string(player.day) + ": Quick Interest");
+        player.last_action = std::to_string(player.day) + ": Quick Interest";
         player.points = check_points(player, "Quick Action");
     }
 
@@ -257,7 +250,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
             if (player.gold >= (player.merch_discount ? 20 : 25)) {
                 player.gold -= (player.merch_discount ? 20 : 25);
                 player.food_consumption = std::max(player.food_consumption - 2, 0);
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Cornucopia));
+                player.last_action = "Merch - " + mo_conversion.at(m_Cornucopia);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Cornucopia;
@@ -268,7 +261,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
             if (player.gold >= (player.merch_discount ? 20 : 25)) {
                 player.gold -= (player.merch_discount ? 20 : 25);
                 player.item_shop[i_Spice][id_Sell] += 20;
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Route_to_Mahaji));
+                player.last_action = "Merch - " + mo_conversion.at(m_Route_to_Mahaji);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Route_to_Mahaji;
@@ -279,7 +272,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
             if (player.gold >= (player.merch_discount ? 20 : 25)) {
                 player.gold -= (player.merch_discount ? 20 : 25);
                 player.statue = true;
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Wooden_Statuette));
+                player.last_action = "Merch - " + mo_conversion.at(m_Wooden_Statuette);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Wooden_Statuette;
@@ -290,7 +283,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
             if (player.gold >= (player.merch_discount ? 40 : 50)) {
                 player.gold -= (player.merch_discount ? 40 : 50);
                 player.backpack += 20;
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Canvas_Bag));
+                player.last_action = "Merch - " + mo_conversion.at(m_Canvas_Bag);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Canvas_Bag;
@@ -303,7 +296,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
                 player.trader += 1;
                 player.food_consumption += player.npc_shop[n_Trader][nd_Eat];
                 player.interest_rate += player.trader_interest ? 0.1 : 0; // TODO Should this happen?
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Leaders_Necklace));
+                player.last_action = "Merch - " + mo_conversion.at(m_Leaders_Necklace);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Leaders_Necklace;
@@ -314,7 +307,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
             if (player.gold >= (player.merch_discount ? 40 : 50)) {
                 player.gold -= (player.merch_discount ? 40 : 50);
                 player.hand_of_midas = true;
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Hand_of_Midas));
+                player.last_action = "Merch - " + mo_conversion.at(m_Hand_of_Midas);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Hand_of_Midas;
@@ -324,8 +317,8 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
         case m_Sturdy_Saddle: // Camels carry an extra 20
             if (player.gold >= (player.merch_discount ? 80 : 100)) {
                 player.gold -= (player.merch_discount ? 80 : 100);
-                player.npc_shop[n_Camel][id_Weight] += 20;
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Sturdy_Saddle));
+                player.npc_shop[n_Camel][nd_Effect] += 20;
+                player.last_action = "Merch - " + mo_conversion.at(m_Sturdy_Saddle);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Sturdy_Saddle;
@@ -336,7 +329,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
             if (player.gold >= (player.merch_discount ? 80 : 100)) {
                 player.gold -= (player.merch_discount ? 80 : 100);
                 player.max_day += 1;
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Magic_Cleppsydra));
+                player.last_action = "Merch - " + mo_conversion.at(m_Magic_Cleppsydra);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Magic_Cleppsydra;
@@ -347,7 +340,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
             if (player.gold >= (player.merch_discount ? 80 : 100)) {
                 player.gold -= (player.merch_discount ? 80 : 100);
                 player.interest_rate += 0.2;
-                player.actions.emplace_back("Merch - " + mo_conversion.at(m_Blue_Treasure));
+                player.last_action = "Merch - " + mo_conversion.at(m_Blue_Treasure);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
                 player.player_world.merch = m_Blue_Treasure;
@@ -365,7 +358,7 @@ void Game::event_witch(Player &player, const witch_options &selection) {
         case w_Presents_Gift: // +20 weight, -20% Saving
             player.backpack += 20;
             player.interest_rate = std::max(player.interest_rate - 0.2, 0.1) ;
-            player.actions.emplace_back("Witch - " + wo_conversion.at(w_Presents_Gift));
+            player.last_action = "Witch - " + wo_conversion.at(w_Presents_Gift);
             player.witch_happened = true;
             player.day_start_skip = true;
             player.player_world.witch = w_Presents_Gift;
@@ -373,7 +366,7 @@ void Game::event_witch(Player &player, const witch_options &selection) {
         case w_Vertue_of_Patience: // Saving doesn't decrease, +100 Jewelry cost
             player.set_interest = true;
             player.item_shop[i_Jewelry][id_Buy] += 100;
-            player.actions.emplace_back("Witch - " + wo_conversion.at(w_Vertue_of_Patience));
+            player.last_action = "Witch - " + wo_conversion.at(w_Vertue_of_Patience);
             player.witch_happened = true;
             player.day_start_skip = true;
             player.player_world.witch = w_Vertue_of_Patience;
@@ -381,7 +374,7 @@ void Game::event_witch(Player &player, const witch_options &selection) {
         case w_Midas_was_a_Trader: // +150 Trader earn, -300 Marble sell
             player.npc_shop[n_Trader][nd_Effect] += 150;
             player.item_shop[i_Marble][id_Sell] *= 0;
-            player.actions.emplace_back("Witch - " + wo_conversion.at(w_Midas_was_a_Trader));
+            player.last_action = "Witch - " + wo_conversion.at(w_Midas_was_a_Trader);
             player.witch_happened = true;
             player.day_start_skip = true;
             player.player_world.witch = w_Midas_was_a_Trader;
@@ -390,7 +383,7 @@ void Game::event_witch(Player &player, const witch_options &selection) {
             player.npc_shop[n_Camel][nd_Effect] += 10;
             player.food_consumption += player.npc_shop[n_Camel][nd_Eat] * player.camel;
             player.npc_shop[n_Camel][nd_Eat] *= 2;
-            player.actions.emplace_back("Witch - " + wo_conversion.at(w_Camelization));
+            player.last_action = "Witch - " + wo_conversion.at(w_Camelization);
             player.witch_happened = true;
             player.day_start_skip = true;
             player.player_world.witch = w_Camelization;
@@ -398,17 +391,17 @@ void Game::event_witch(Player &player, const witch_options &selection) {
         case w_Time_is_Money: // +1 Day, - 500 Jewelry sell
             player.max_day += 1;
             player.item_shop[i_Jewelry][id_Sell] -= 500;
-            player.actions.emplace_back("Witch - " + wo_conversion.at(w_Time_is_Money));
+            player.last_action = "Witch - " + wo_conversion.at(w_Time_is_Money);
             player.witch_happened = true;
             player.day_start_skip = true;
             player.player_world.witch = w_Time_is_Money;
             break;
         case w_Animal_Lover: // +2 Camels, -1 Day
-            // TODO - Do these Camel need to eat? Check with different towns
+            // The granted camels should add their normal food cost once.
             player.camel += 2;
-            player.food_consumption += player.npc_shop[n_Camel][nd_Eat] * player.camel * 2;
+            player.food_consumption += player.npc_shop[n_Camel][nd_Eat] * 2;
             player.max_day -= 1;
-            player.actions.emplace_back("Witch - " + wo_conversion.at(w_Animal_Lover));
+            player.last_action = "Witch - " + wo_conversion.at(w_Animal_Lover);
             player.witch_happened = true;
             player.day_start_skip = true;
             player.player_world.witch = w_Animal_Lover;
@@ -418,7 +411,7 @@ void Game::event_witch(Player &player, const witch_options &selection) {
             player.npc_shop[n_Camel][nd_Eat] = 0;
             player.food_consumption = 0;
             player.item_shop[i_Silk][id_Buy] += 200;
-            player.actions.emplace_back("Witch - " + wo_conversion.at(w_Oasis_of_Sanctifan));
+            player.last_action = "Witch - " + wo_conversion.at(w_Oasis_of_Sanctifan);
             player.witch_happened = true;
             player.day_start_skip = true;
             player.player_world.witch = w_Oasis_of_Sanctifan;
@@ -426,7 +419,7 @@ void Game::event_witch(Player &player, const witch_options &selection) {
         case w_The_Stonecutter: // -15 Marble weight, +60 Marble cost
             player.item_shop[i_Marble][id_Weight] -= 15;
             player.item_shop[i_Marble][id_Buy] += 60;
-            player.actions.emplace_back("Witch - " + wo_conversion.at(w_The_Stonecutter));
+            player.last_action = "Witch - " + wo_conversion.at(w_The_Stonecutter);
             player.witch_happened = true;
             player.day_start_skip = true;
             player.player_world.witch = w_The_Stonecutter;

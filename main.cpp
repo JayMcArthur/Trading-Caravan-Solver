@@ -1,13 +1,70 @@
-#include <vector>
 #include <iostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 #include "consts/enums.h"
 #include "purchaseHandler/BestPurchaseHandler.h"
 #include "player/player.h"
-#include "solvers/Gamesolver.h"
-#include "solvers/TCSC.cpp"
+#include "solvers/GameSolver.h"
 
 
-int main() {
+int main(int argc, char** argv) {
+    int array_limit = 1000000;
+    int print_counter = 500000;
+    uint64_t memory_limit_mb = 0;
+    bool warm_trees = true;
+
+    for (int index = 1; index < argc; ++index) {
+        const std::string command = argv[index];
+        if (command == "--prebuild-trees") {
+            BestPurchaseHandler handler;
+            handler.prebuildSupportedTrees();
+            std::cout << "[*] Purchase trees ready in Saved_Trees\n";
+            return 0;
+        }
+        if (command == "--verify-trees") {
+            uint16_t max_gold = 250;
+            uint16_t max_weight = 60;
+            if (index + 1 < argc) {
+                max_gold = static_cast<uint16_t>(std::stoi(argv[index + 1]));
+            }
+            if (index + 2 < argc) {
+                max_weight = static_cast<uint16_t>(std::stoi(argv[index + 2]));
+            }
+
+            BestPurchaseHandler handler;
+            const bool ok = handler.verifySupportedTrees(max_gold, max_weight, std::cout);
+            std::cout << (ok ? "[*] Verification passed\n" : "[!] Verification failed\n");
+            return ok ? 0 : 1;
+        }
+        if (command == "--array-limit" && index + 1 < argc) {
+            array_limit = std::stoi(argv[++index]);
+            continue;
+        }
+        if (command == "--print-counter" && index + 1 < argc) {
+            print_counter = std::stoi(argv[++index]);
+            continue;
+        }
+        if (command == "--memory-limit-mb" && index + 1 < argc) {
+            memory_limit_mb = static_cast<uint64_t>(std::stoull(argv[++index]));
+            continue;
+        }
+        if (command == "--no-warm-trees") {
+            warm_trees = false;
+            continue;
+        }
+        if (command == "--help") {
+            std::cout
+                << "Usage: Merchant_Trading_Caravan [options]\n"
+                << "  --prebuild-trees\n"
+                << "  --verify-trees [max_gold] [max_weight]\n"
+                << "  --array-limit <count>\n"
+                << "  --print-counter <count>\n"
+                << "  --memory-limit-mb <mb>\n"
+                << "  --no-warm-trees\n";
+            return 0;
+        }
+    }
 
     // Code to Test Handler
     /*
@@ -65,11 +122,12 @@ int main() {
     town_options town = t_Normalia;
     bool merch_on = true;
     bool witch_on = true;
-    int array_limit = 1000000;
-    int print_counter = 100000000;
     //que.clear();
 
-    GameSolver solver(town, merch_on, witch_on, array_limit, print_counter, que);
+    GameSolver solver(town, merch_on, witch_on, array_limit, print_counter, que, "", memory_limit_mb);
+    if (warm_trees) {
+        solver.warm_purchase_trees();
+    }
 
     //solver.find_solve_breath();
     solver.find_solve_depth();

@@ -6,9 +6,12 @@
 #define TRADING_CARAVAN_SOLVER_BESTPURCHASEHANDLER_H
 
 #include <fstream>
+#include <chrono>
 #include <filesystem>
 #include <cmath>
 #include <iostream>
+#include <limits>
+#include <unordered_map>
 #include "../consts/enums.h"
 #include "../player/player.h"
 #include "FenwickTree2D.h"
@@ -46,15 +49,55 @@ bool isValidOption(const uint8_t& value, const T (&validOptions)[N]) {
 
 class BestPurchaseHandler {
 public:
+    struct ProfilingKeySummary {
+        std::string key;
+        uint64_t calls = 0;
+        double total_ms = 0.0;
+        double query_ms = 0.0;
+        double ensure_ms = 0.0;
+    };
+
+    struct ProfilingSummary {
+        uint64_t calls = 0;
+        uint64_t cache_misses = 0;
+        double total_ms = 0.0;
+        double query_ms = 0.0;
+        double ensure_ms = 0.0;
+        ProfilingKeySummary slowest_total_key;
+        ProfilingKeySummary slowest_query_key;
+    };
+
     BestPurchaseHandler();
     std::pair<uint32_t, buy_list> getBestBuy(uint16_t cost, uint16_t weight, const Player& player);
+    void prebuildSupportedTrees();
+    void warmSupportedTrees();
+    bool verifySupportedTrees(uint16_t max_gold, uint16_t max_weight, std::ostream& out);
+    [[nodiscard]] ProfilingSummary getProfilingSummary() const;
 
 private:
+    struct ProfilingKeyData {
+        uint64_t calls = 0;
+        std::chrono::nanoseconds total_time{0};
+        std::chrono::nanoseconds query_time{0};
+        std::chrono::nanoseconds ensure_time{0};
+    };
+
     std::unordered_map<std::string, FenwickTree2D> loadedTrees;
     std::unordered_map<std::string, bool> prebuiltKeys;
+    uint64_t profiling_calls = 0;
+    uint64_t profiling_cache_misses = 0;
+    std::chrono::nanoseconds profiling_total_time{0};
+    std::chrono::nanoseconds profiling_query_time{0};
+    std::chrono::nanoseconds profiling_ensure_time{0};
+    std::unordered_map<std::string, ProfilingKeyData> profiling_per_key;
     void loadTree(const std::string& key);
     void saveTree(const std::string& key);
     void buildTree(const Player& player, const std::string& key);
+    static std::vector<Player> buildSupportedWorldPlayers();
+    static std::pair<uint32_t, buy_list> bruteForceBestBuy(const Player& player, uint16_t cost, uint16_t weight);
+    static uint32_t calculateProfit(const Player& player, const buy_list& buy);
+    static uint16_t calculateCost(const Player& player, const buy_list& buy);
+    static uint16_t calculateWeight(const Player& player, const buy_list& buy);
 
     static std::string convertWorldToKey(const world& world_data) {
         std::string converted;
@@ -74,61 +117,93 @@ private:
         return "tree_" + std::to_string(town) + "_" + std::to_string(merch) + "_" + std::to_string(witch) + ".bin";
     }
     static void generateElementsForWorld(const Player& player, std::vector<buy_option>& options) {
-        int max_spice = std::ceil(static_cast<double>(MAX_WEIGHT) / player.item_shop[i_Spice][id_Weight]);
-        int max_pottery = std::ceil(static_cast<double>(MAX_WEIGHT) / player.item_shop[i_Pottery][id_Weight]);
-        int max_marble = std::ceil(static_cast<double>(MAX_WEIGHT) / player.item_shop[i_Marble][id_Weight]);
-        int max_silk = std::ceil(static_cast<double>(MAX_WEIGHT) / player.item_shop[i_Silk][id_Weight]);
-        int max_jewelry = std::ceil(static_cast<double>(MAX_WEIGHT) / player.item_shop[i_Jewelry][id_Weight]);
+        struct ItemSpec {
+            uint8_t item_index;
+            uint16_t cost;
+            uint16_t weight;
+            uint32_t profit;
+        };
 
-        std::unordered_map<std::string, size_t> found;
+        std::vector<ItemSpec> profitable_items;
+        profitable_items.reserve(5);
+        for (uint8_t item = i_Spice; item <= i_Jewelry; ++item) {
+            const int profit = player.item_shop[item][id_Sell] - player.item_shop[item][id_Buy];
+            const int cost = player.item_shop[item][id_Buy];
+            const int weight = player.item_shop[item][id_Weight];
+            if (profit > 0 && cost > 0 && weight > 0) {
+                profitable_items.push_back(ItemSpec{
+                    item,
+                    static_cast<uint16_t>(cost),
+                    static_cast<uint16_t>(weight),
+                    static_cast<uint32_t>(profit)
+                });
+            }
+        }
 
-        // 1 spice, 8 pottery, 1 marble
+        if (profitable_items.empty()) {
+            return;
+        }
 
-        for (int s = 0; s < max_spice; ++s) {
-            for (int p = 0; p < max_pottery; ++p) {
-                for (int m = 0; m < max_marble; ++m) {
-                    for (int i = 0; i < max_silk; ++i) {
-                        for (int j = 0; j < max_jewelry; ++j) {
-                            // Calculate profit, weight, and cost
-                            uint32_t profit = std::max(player.item_shop[i_Spice][id_Sell] - player.item_shop[i_Spice][id_Buy], 0) * s +
-                                    std::max(player.item_shop[i_Pottery][id_Sell] - player.item_shop[i_Pottery][id_Buy], 0) * p +
-                                    std::max(player.item_shop[i_Marble][id_Sell] - player.item_shop[i_Marble][id_Buy], 0) * m +
-                                    std::max(player.item_shop[i_Silk][id_Sell] - player.item_shop[i_Silk][id_Buy], 0) * i +
-                                    std::max(player.item_shop[i_Jewelry][id_Sell] - player.item_shop[i_Jewelry][id_Buy], 0) * j;
-                            int weight = player.item_shop[i_Spice][id_Weight] * s +
-                                         player.item_shop[i_Pottery][id_Weight] * p +
-                                         player.item_shop[i_Marble][id_Weight] * m +
-                                         player.item_shop[i_Silk][id_Weight] * i +
-                                         player.item_shop[i_Jewelry][id_Weight] * j;
-                            int cost = player.item_shop[i_Spice][id_Buy] * s +
-                                       player.item_shop[i_Pottery][id_Buy] * p +
-                                       player.item_shop[i_Marble][id_Buy] * m +
-                                       player.item_shop[i_Silk][id_Buy] * i +
-                                       player.item_shop[i_Jewelry][id_Buy] * j;
+        const size_t stride = static_cast<size_t>(MAX_WEIGHT) + 1;
+        const size_t total_states = (static_cast<size_t>(MAX_GOLD) + 1) * stride;
+        std::vector<uint8_t> reachable(total_states, 0);
+        std::vector<uint32_t> best_profit(total_states, 0);
+        std::vector<buy_list> best_buys(total_states);
 
-                            // Create a unique index using cost and weight
-                            std::string index = std::to_string(cost) + "_" +  std::to_string(weight);
+        reachable[0] = 1;
 
-                            // Skip invalid combinations
-                            if ((MAX_GOLD < cost && MAX_WEIGHT < weight) || profit == 0) {
-                                continue;
-                            }
+        for (uint16_t cost = 0; cost <= MAX_GOLD; ++cost) {
+            const size_t row_offset = static_cast<size_t>(cost) * stride;
+            for (uint16_t weight = 0; weight <= MAX_WEIGHT; ++weight) {
+                const size_t index = row_offset + weight;
+                if (!reachable[index]) {
+                    continue;
+                }
 
-                            // Check if index is new or update the result if profit is higher
-                            auto it = found.find(index);
-                            if (it == found.end()) {
-                                // New combination, add to found and found_list
-                                found[index] = options.size();
-                                options.emplace_back(cost, weight, profit, buy_list(0, s, p, m, i, j));
-                            } else {
-                                size_t idx = it->second;
-                                if (options[idx].profit < profit) {
-                                    options[idx].profit = profit;
-                                    options[idx].buy_data = buy_list(0, s, p, m, i, j);
-                                }
-                            }
+                for (const auto& item : profitable_items) {
+                    const uint32_t next_cost = static_cast<uint32_t>(cost) + item.cost;
+                    const uint32_t next_weight = static_cast<uint32_t>(weight) + item.weight;
+                    if (next_cost > MAX_GOLD || next_weight > MAX_WEIGHT) {
+                        continue;
+                    }
+
+                    const size_t next_index = static_cast<size_t>(next_cost) * stride + next_weight;
+                    const uint32_t next_profit = best_profit[index] + item.profit;
+                    if (!reachable[next_index] || next_profit > best_profit[next_index]) {
+                        reachable[next_index] = 1;
+                        best_profit[next_index] = next_profit;
+                        best_buys[next_index] = best_buys[index];
+                        switch (item.item_index) {
+                            case i_Spice:
+                                ++best_buys[next_index].spice;
+                                break;
+                            case i_Pottery:
+                                ++best_buys[next_index].pottery;
+                                break;
+                            case i_Marble:
+                                ++best_buys[next_index].marble;
+                                break;
+                            case i_Silk:
+                                ++best_buys[next_index].silk;
+                                break;
+                            case i_Jewelry:
+                                ++best_buys[next_index].jewelry;
+                                break;
+                            default:
+                                break;
                         }
                     }
+                }
+            }
+        }
+
+        options.reserve((MAX_GOLD + 1) * 8);
+        for (uint16_t cost = 0; cost <= MAX_GOLD; ++cost) {
+            const size_t row_offset = static_cast<size_t>(cost) * stride;
+            for (uint16_t weight = 0; weight <= MAX_WEIGHT; ++weight) {
+                const size_t index = row_offset + weight;
+                if (reachable[index] && best_profit[index] > 0) {
+                    options.emplace_back(cost, weight, best_profit[index], best_buys[index]);
                 }
             }
         }
