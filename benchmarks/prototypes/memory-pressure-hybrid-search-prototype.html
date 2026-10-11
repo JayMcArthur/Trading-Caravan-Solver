@@ -1,0 +1,91 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PROTOTYPE — memory-pressure hybrid search</title>
+<style>
+  body{font:15px system-ui;max-width:1050px;margin:30px auto;padding:0 18px;background:#111827;color:#e5e7eb}
+  h1,h2{color:#f9fafb}.note{color:#93c5fd}.warn{color:#fca5a5}button,input{font:inherit;margin:4px;padding:7px 10px}
+  button{background:#2563eb;color:white;border:0;border-radius:6px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .card,pre{background:#1f2937;padding:12px;border-radius:8px}.tabs button{background:#374151}.tabs button.on{background:#059669}
+  code{color:#fde68a}pre{white-space:pre-wrap}.bar{height:18px;background:#374151;border-radius:9px;overflow:hidden}.fill{height:100%;background:#10b981}
+</style>
+<h1>PROTOTYPE: broad beam → suffix-batch drain</h1>
+<p class="note">Question: can the solver keep its broad prefix strategy, then finish retained prefixes in bounded batches when the next layer would exceed memory?</p>
+
+<div class="grid">
+  <label class="card">Memory cap MB<br><input id="cap" type="number" value="640"></label>
+  <label class="card">Retained prefixes<br><input id="frontier" type="number" value="50000"></label>
+  <label class="card">Resident input batch<br><input id="batch" type="number" value="500"></label>
+  <label class="card">In-batch suffix beam<br><input id="suffix" type="number" value="5000"></label>
+  <label class="card">Children per prefix<br><input id="growth" type="number" value="3"></label>
+</div>
+<p>
+  <button id="broad">Generate broad layer</button>
+  <button id="pressure">Detect pressure</button>
+  <button id="drain">Finish next batch</button>
+  <button id="all">Drain all</button>
+  <button id="reset">Reset</button>
+</p>
+<div class="bar"><div id="fill" class="fill"></div></div>
+<p id="summary"></p>
+<pre id="state"></pre>
+
+<h2>Guided cases</h2>
+<div class="tabs">
+  <button data-case="naive">Naive layer</button>
+  <button data-case="hybrid">Hybrid drain</button>
+  <button data-case="provenance">Deferred Buy provenance</button>
+</div>
+<div id="guide" class="card"></div>
+
+<script>
+const initial=()=>({mode:"broad",queuedPrefixes:+frontier.value,activePrefixes:0,generatedChildren:0,
+  retainedChildren:0,completedPrefixes:0,batchesFinished:0,traceNodes:+frontier.value*8,
+  deferredRows:+frontier.value*18,bestScore:null,pressure:false,notes:[]});
+let s;
+function memory(){
+  // Deliberately approximate: the prototype tests scheduling shape, not C++ byte sizes.
+  return 28+(s.queuedPrefixes+s.activePrefixes+s.retainedChildren)*0.0018+s.traceNodes*0.000045+s.deferredRows*0.000035;
+}
+function render(){
+  const used=memory(),capMb=+cap.value;
+  fill.style.width=Math.min(100,used/capMb*100)+"%";
+  fill.style.background=used>capMb*.9?"#ef4444":used>capMb*.7?"#f59e0b":"#10b981";
+  summary.innerHTML=`Estimated <b>${used.toFixed(1)} MB</b> / ${capMb} MB — mode <code>${s.mode}</code>`;
+  state.textContent=JSON.stringify({...s,estimatedMB:+used.toFixed(1)},null,2);
+}
+function reset(){s=initial();render()}
+function broadLayer(){
+  s.mode="broad expansion";s.activePrefixes=s.queuedPrefixes;s.queuedPrefixes=0;
+  s.generatedChildren=s.activePrefixes*(+growth.value);s.retainedChildren=Math.min(s.generatedChildren,+frontier.value);
+  s.traceNodes+=s.generatedChildren*7;s.deferredRows+=s.generatedChildren*12;
+  s.notes.push("Broad expansion retains globally ranked children, but discarded-child traces remain until compaction.");render();
+}
+function detect(){
+  s.pressure=memory()>+cap.value*.75;
+  if(s.pressure){
+    s.mode="batch drain";
+    if(!s.queuedPrefixes){s.queuedPrefixes=s.retainedChildren;s.retainedChildren=0}
+    s.activePrefixes=0;s.generatedChildren=0;
+    s.traceNodes=s.queuedPrefixes*8;s.deferredRows=s.queuedPrefixes*18;
+    s.notes.push("Pressure converts the completed retained layer into a compact waiting frontier; unresolved Buy provenance stays attached.");
+  } else s.notes.push("No pressure: continue ordinary global beam.");render();
+}
+function drainOne(){
+  if(!s.queuedPrefixes){s.notes.push("No waiting prefixes remain.");render();return}
+  s.mode="finishing one suffix batch";const n=Math.min(+batch.value,s.queuedPrefixes),suffixWidth=+suffix.value;
+  s.queuedPrefixes-=n;s.activePrefixes=n;s.traceNodes+=Math.min(n*(+growth.value),suffixWidth)*45;s.deferredRows+=Math.min(n*(+growth.value),suffixWidth)*60;
+  s.completedPrefixes+=n;s.batchesFinished++;s.bestScore=Math.max(s.bestScore||0,45000+s.batchesFinished*137);
+  // FinishedSolve owns concrete actions, so this batch's state/provenance arena can go away.
+  s.activePrefixes=0;s.traceNodes=s.queuedPrefixes*8;s.deferredRows=s.queuedPrefixes*18;
+  s.notes.push(`Finished ${n} prefixes with an in-batch beam of ${suffixWidth}, retained top concrete routes, then compacted traces back to the waiting frontier.`);render();
+}
+broad.onclick=broadLayer;pressure.onclick=detect;drain.onclick=drainOne;
+all.onclick=()=>{if(!s.pressure)detect();while(s.queuedPrefixes)drainOne()};reset.onclick=reset;
+const guides={
+ naive:"<b>Naive layer:</b> all retained prefixes generate children into one global layer. This has the strongest global competition, but peak memory includes the prefix frontier, child frontier, deferred rows, and discarded traces at once.",
+ hybrid:"<b>Hybrid drain:</b> once a completed layer forecasts pressure, retain that prefix frontier and finish batches to the end. Input batch size controls resident prefixes; the independent suffix beam controls how widely each batch may regrow. This visits every retained prefix but intentionally stops comparing suffix states across different batches.",
+ provenance:"<b>Deferred Buy invariant:</b> do not serialize only the visible representative Player or rebuild a guessed Buy. The waiting frontier must retain each <code>DeferredSearchState</code> and all trace provenance needed to materialize a replayable route. In-process batching satisfies this."
+};
+document.querySelectorAll("[data-case]").forEach(b=>b.onclick=()=>{document.querySelectorAll("[data-case]").forEach(x=>x.classList.remove("on"));b.classList.add("on");guide.innerHTML=guides[b.dataset.case]});
+reset();document.querySelector('[data-case="hybrid"]').click();
+</script>

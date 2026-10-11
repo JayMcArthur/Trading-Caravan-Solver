@@ -6,10 +6,12 @@
 #include <pybind11/stl.h>
 #include <deque>
 #include <set>
+#include <stdexcept>
 #include <vector>
 #include "../game/Game.h"
 #include "../purchaseHandler/BestPurchaseHandler.h"
 #include "helpers.h"
+#include "../runtime/ProcessSafety.h"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -63,6 +65,7 @@ public:
                 "trader_interest"_a=working_state.trader_interest,
                 "day"_a=working_state.day,
                 "max_day"_a=working_state.max_day,
+                "traveler_mode"_a=working_state.traveler_mode,
                 "available_actions"_a=working_state.available_actions,
                 "points"_a=working_state.points
         );
@@ -137,7 +140,7 @@ public:
     bool step(int action) {
         switch (action) {
             case 1: {
-                Helpers::run_buy_event(working_state, state_queue, handler);
+                Helpers::run_buy_event(working_state, state_queue, handler, merch_on, witch_on);
                 break;
             }
             case 2: {
@@ -172,6 +175,9 @@ public:
 
 #ifdef BUILD_PYTHON_MODULE
 PYBIND11_MODULE(TCSC, m) {
+    if (!install_process_safety_limits(1024)) {
+        throw std::runtime_error("Could not install native process safety limits; refusing to load TCSC");
+    }
     py::class_<AISolver>(m, "AISolver")
             .def(py::init<>())
             .def("get_current_state", &AISolver::get_current_state)

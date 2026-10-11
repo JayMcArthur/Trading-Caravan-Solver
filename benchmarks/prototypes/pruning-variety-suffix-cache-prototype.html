@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pruning Variety + Solved Suffix Cache Prototype</title>
+<style>
+  :root { --ink:#17201d; --muted:#66716c; --paper:#f5f2e9; --card:#fffdf7; --line:#d9d3c4; --accent:#176b56; --warn:#a34a2a; }
+  * { box-sizing:border-box; }
+  body { margin:0; color:var(--ink); background:var(--paper); font:16px/1.45 system-ui,sans-serif; }
+  main { width:min(1080px,calc(100% - 32px)); margin:32px auto 64px; }
+  h1,h2,h3 { line-height:1.15; }
+  h1 { margin-bottom:8px; }
+  .intro { max-width:850px; color:var(--muted); }
+  .notice { border-left:4px solid var(--warn); padding:10px 14px; background:#fff4ec; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin:18px 0; }
+  .metric,.panel { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .metric span { display:block; color:var(--muted); font-size:13px; }
+  .metric strong { display:block; font-size:22px; margin-top:3px; }
+  button { border:1px solid var(--accent); border-radius:7px; background:white; color:var(--accent); padding:8px 12px; cursor:pointer; font-weight:650; }
+  button:hover,button.active { background:var(--accent); color:white; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; }
+  table { border-collapse:collapse; width:100%; margin-top:10px; font-size:14px; }
+  th,td { text-align:left; padding:7px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); }
+  .good { color:var(--accent); font-weight:700; }
+  .bad { color:var(--warn); font-weight:700; }
+  .tabs { margin-bottom:12px; }
+  .log { min-height:72px; white-space:pre-wrap; color:var(--muted); }
+  code { background:#ebe6d9; padding:1px 4px; border-radius:4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pruning variety + solved suffix cache</h1>
+  <p class="intro">Question: can repeated beam runs deliberately retain different near-cutoff route families, and can exact work from the final days be reused without turning an incomplete beam result into a false proof?</p>
+  <p class="notice"><strong>Prototype only.</strong> This is a small in-memory search model, not game code. It makes the safety boundary visible: variety may change what a lossy run discovers; only fully explored descendants may produce a solved cache entry.</p>
+
+  <h2>Current experiment</h2>
+  <div id="state" class="grid"></div>
+  <div class="panel">
+    <h3>Free play</h3>
+    <div class="controls">
+      <button data-action="beam">Run ordinary beam</button>
+      <button data-action="variety">Run seeded variety beam</button>
+      <button data-action="seed">Use next run seed</button>
+      <button data-action="solve-final">Solve all final-day states</button>
+      <button data-action="propagate">Propagate one solved day backward</button>
+      <button data-action="reuse">Reach cached state A again</button>
+      <button data-action="unsafe">Try caching a beam-pruned parent</button>
+      <button data-action="reset">Reset</button>
+    </div>
+    <div id="log" class="log"></div>
+  </div>
+
+  <h2>Retained and cached states</h2>
+  <div class="panel"><table id="rows"></table></div>
+
+  <h2>Guided walkthroughs</h2>
+  <div class="panel">
+    <div id="tabs" class="controls tabs"></div>
+    <p id="guide"></p>
+    <div id="steps" class="controls"></div>
+  </div>
+</main>
+
+<script>
+// Pure prototype module: no DOM access.
+const SearchPrototype = (() => {
+  const routes = [
+    {id:"A", family:"interest", rank:100, finish:360, children:["A1","A2"]},
+    {id:"B", family:"trade",    rank: 98, finish:372, children:["B1","B2"]},
+    {id:"C", family:"crew",     rank: 97, finish:355, children:["C1","C2"]},
+    {id:"D", family:"trade",    rank: 96, finish:405, children:["D1","D2"]},
+    {id:"E", family:"food",     rank: 95, finish:340, children:["E1","E2"]},
+    {id:"F", family:"camel",    rank: 94, finish:388, children:["F1","F2"]}
+  ];
+  const finals = Object.fromEntries(routes.flatMap(r => r.children.map((id,i) => [
+    id, {id, parent:r.id, score:r.finish-(i*7)}
+  ])));
+
+  function initial() {
+    return {seed:1, beam:3, core:2, retained:[], best:null, solved:{}, cacheHits:0, spliced:[], log:"Ready. The ordinary beam always keeps A, B, C and misses hidden winner D."};
+  }
+  function hash(text, seed) {
+    let x=(2166136261^seed)>>>0;
+    for (const c of text) { x^=c.charCodeAt(0); x=Math.imul(x,16777619)>>>0; }
+    return x;
+  }
+  function finish(state, retained, label) {
+    const best=retained.reduce((a,id) => !a||route(id).finish>a.score ? {id,score:route(id).finish}:a, null);
+    return {...state,retained,best,log:`${label} retained ${retained.join(", ")}. Best discovered finish: ${best.score} from ${best.id}.`};
+  }
+  function route(id) { return routes.find(r=>r.id===id); }
+  function ordinaryBeam(state) {
+    return finish(state,[...routes].sort((a,b)=>b.rank-a.rank).slice(0,state.beam).map(x=>x.id),"Ordinary beam");
+  }
+  function varietyBeam(state) {
+    const ranked=[...routes].sort((a,b)=>b.rank-a.rank);
+    const kept=ranked.slice(0,state.core).map(x=>x.id);
+    const candidates=ranked.slice(state.core);
+    const families=new Map();
+    for (const row of candidates) {
+      const prior=families.get(row.family);
+      if (!prior || hash(row.id,state.seed)<hash(prior.id,state.seed)) families.set(row.family,row);
+    }
+    const lottery=[...families.values()].sort((a,b)=>hash(a.id,state.seed)-hash(b.id,state.seed));
+    for (const row of lottery) {
+      if (kept.length===state.beam) break;
+      kept.push(row.id);
+    }
+    return finish(state,kept,`Seeded variety run ${state.seed}`);
+  }
+  function solveFinal(state) {
+    const solved={...state.solved};
+    for (const row of Object.values(finals)) solved[row.id]={status:"solved",top:[row.score],reason:"terminal score evaluated"};
+    return {...state,solved,log:"Every legal final-day state was evaluated, so all 12 terminal entries are safely marked solved."};
+  }
+  function propagate(state) {
+    const solved={...state.solved};
+    let added=0;
+    for (const parent of routes) {
+      const children=parent.children.map(id=>solved[id]);
+      if (children.every(Boolean)) {
+        const top=children.flatMap(x=>x.top).sort((a,b)=>b-a).slice(0,3);
+        solved[parent.id]={status:"solved",top,reason:"all legal children solved"};
+        added++;
+      }
+    }
+    const complete=routes.every(r=>solved[r.id]);
+    return {...state,solved,log:added ? `Propagated ${added} parents. ${complete?"The whole suffix layer is now exact.":"Some parents remain open."}` : "Nothing propagated: solve every legal child first."};
+  }
+  function unsafe(state) {
+    const pruned=routes.filter(r=>!state.retained.includes(r.id)).map(r=>r.id);
+    return {...state,log:pruned.length
+      ? `Rejected: ${pruned.join(", ")} were removed by a lossy beam. Their parent may be recorded as partial/seen, but cannot be marked solved.`
+      : "No beam-pruned branch exists in the current view."};
+  }
+  function reuse(state) {
+    const cached=state.solved.A;
+    if (!cached) {
+      return {...state,log:"State A has a hash match, but its entry is not solved. It must still be expanded."};
+    }
+    const score=cached.top[0];
+    const best=!state.best||score>state.best.score?{id:"A + cached suffix",score}:state.best;
+    return {...state,best,cacheHits:state.cacheHits+1,spliced:[...cached.top],
+      log:`Solved-cache hit: skipped A's descendants and spliced proven suffix scores [${cached.top.join(", ")}] into this new prefix.`};
+  }
+  function step(state, action) {
+    if (action==="reset") return initial();
+    if (action==="seed") return {...state,seed:state.seed+1,log:`Run seed changed to ${state.seed+1}. Exact state identity and dominance do not change.`};
+    if (action==="beam") return ordinaryBeam(state);
+    if (action==="variety") return varietyBeam(state);
+    if (action==="solve-final") return solveFinal(state);
+    if (action==="propagate") return propagate(state);
+    if (action==="reuse") return reuse(state);
+    if (action==="unsafe") return unsafe(state);
+    return state;
+  }
+  function rows(state) {
+    return routes.map(r=>({id:r.id,family:r.family,rank:r.rank,trueBest:r.finish,retained:state.retained.includes(r.id),cache:state.solved[r.id]?.status||"open",top:state.solved[r.id]?.top?.join(", ")||"—"}));
+  }
+  return {initial,step,rows,totalFinals:Object.keys(finals).length};
+})();
+
+// Thin page shell.
+(() => {
+  let state=SearchPrototype.initial(), tab=0, step=0;
+  const scenarios=[
+    {name:"Variety finds a miss",text:"See why keeping a strong core plus one reproducibly seeded family can discover a route the ordinary ranking always removes.",actions:["beam","seed","variety","seed","variety"]},
+    {name:"Safe backward cache",text:"Solve the terminal layer, move one day backward only after every legal child has an exact result, then reuse a matching state without searching its descendants again.",actions:["reuse","solve-final","propagate","reuse"]},
+    {name:"Unsafe beam cache",text:"Run a lossy beam and try to call the remaining parent solved. The prototype refuses because discarded children were never evaluated.",actions:["beam","unsafe"]}
+  ];
+  function render() {
+    const solved=Object.values(state.solved).filter(x=>x.status==="solved").length;
+    const parentSolved=SearchPrototype.rows(state).filter(x=>x.cache==="solved").length;
+    const metrics=[
+      ["Run seed",state.seed],["Beam width",state.beam],["Always-kept core",state.core],
+      ["Best discovered",state.best?`${state.best.score} via ${state.best.id}`:"not run"],
+      ["Solved terminal entries",`${Math.min(solved,SearchPrototype.totalFinals)} / ${SearchPrototype.totalFinals}`],
+      ["Solved parent entries",`${parentSolved} / 6`],
+      ["Proven suffix reuses",state.cacheHits]
+    ];
+    document.querySelector("#state").innerHTML=metrics.map(([k,v])=>`<div class="metric"><span>${k}</span><strong>${v}</strong></div>`).join("");
+    document.querySelector("#log").textContent=state.log;
+    document.querySelector("#rows").innerHTML="<tr><th>State</th><th>Family</th><th>Ranking</th><th>Actual finish</th><th>Beam</th><th>Suffix cache</th><th>Cached top scores</th></tr>"+
+      SearchPrototype.rows(state).map(r=>`<tr><td>${r.id}</td><td>${r.family}</td><td>${r.rank}</td><td>${r.trueBest}</td><td class="${r.retained?"good":"bad"}">${r.retained?"retained":"pruned"}</td><td>${r.cache}</td><td>${r.top}</td></tr>`).join("");
+  }
+  function act(action) { state=SearchPrototype.step(state,action); render(); }
+  document.querySelectorAll("[data-action]").forEach(b=>b.onclick=()=>act(b.dataset.action));
+  function renderGuide() {
+    document.querySelector("#tabs").innerHTML=scenarios.map((s,i)=>`<button class="${i===tab?"active":""}" data-tab="${i}">${s.name}</button>`).join("");
+    document.querySelector("#guide").textContent=scenarios[tab].text;
+    document.querySelector("#steps").innerHTML=scenarios[tab].actions.map((a,i)=>`<button data-step="${i}" ${i!==step?"disabled":""}>${i+1}. ${a}</button>`).join("");
+    document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{tab=+b.dataset.tab;step=0;state=SearchPrototype.initial();render();renderGuide();});
+    document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{act(scenarios[tab].actions[step++]);renderGuide();});
+  }
+  render(); renderGuide();
+})();
+</script>
+</body>
+</html>

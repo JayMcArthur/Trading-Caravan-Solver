@@ -1,3 +1,10 @@
 /cmake-build-debug/
 /.idea/
 /build/
+/Saved_Trees/
+/*.csv
+/benchmarks/results/
+/search_maps/
+/runtime/
+__pycache__/
+*.pyc

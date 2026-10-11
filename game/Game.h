@@ -6,21 +6,35 @@
 #define TRADING_CARAVAN_SOLVER_GAME_H
 
 #include <string>
+#include <array>
 #include "../consts/enums.h"
 #include "../player/player.h"
 
 class Game {
 public:
     static void apply_town(Player &player, const town_options &town);
+    static void apply_traveler_upgrade(Player &player, traveler_upgrades upgrade);
+    static Player create_traveler_player(
+        town_options town,
+        const std::array<traveler_upgrades, 3>& upgrades,
+        int merchant_day = 0,
+        int witch_day = 0,
+        int disaster_day = 0,
+        disaster_options disaster = d_No_Disaster
+    );
     static void auto_game_loop(Player &player, const std::vector<ga_data> &event_list);
     static void full_day(Player &player, const ga_data &event);
     static void start_of_day(Player &player);
     static void event_buy_items(Player &player, const buy_list &to_buy);
+    static void event_wait(Player &player);
     static void event_sell_items(Player &player);
     static void event_buy_npc(Player &player, const npcs &selection);
     static void event_interest(Player &player);
     static bool event_merchant(Player &player, const merch_options &selection);
     static void event_witch(Player &player, const witch_options &selection);
+    static void event_disaster(Player &player, const disaster_options &selection);
+    static void recalculate_food_consumption(Player &player);
+    static bool check_can_buy_items(const Player &player);
     static int check_has_items(const Player &player);
     static int check_points(const Player &player, const std::string &type);
     static int check_weight_left(const Player &player);

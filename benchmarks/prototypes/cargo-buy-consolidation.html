@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — Cargo Buy lock and Wait</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101418; --panel:#182028; --line:#2c3945; --ink:#edf4f7; --muted:#9fb1bc; --accent:#49c6a3; --bad:#ff8d85; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui,sans-serif; }
+    main { width:min(1000px, calc(100% - 32px)); margin:36px auto 64px; }
+    h1,h2 { margin:.2em 0 .45em; }
+    p { color:var(--muted); max-width:78ch; }
+    .badge { color:var(--accent); letter-spacing:.08em; font-size:.78rem; font-weight:700; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; margin:18px 0; }
+    .state { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+    .field { background:#121920; border-radius:10px; padding:10px 12px; }
+    .field span { display:block; color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; }
+    .field strong { font-size:1.15rem; }
+    button { border:1px solid var(--line); background:#22303a; color:var(--ink); border-radius:9px; padding:9px 12px; cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .buttons { display:flex; flex-wrap:wrap; gap:8px; }
+    .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+    .tabs button.active { background:var(--accent); color:#092019; border-color:var(--accent); }
+    .message { min-height:1.5em; color:var(--accent); font-weight:650; }
+    .message.bad { color:var(--bad); }
+    ol { padding-left:22px; }
+    li { margin:9px 0; color:var(--muted); }
+    li button { margin-left:8px; }
+    code { color:#c7f6e8; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="badge">THROWAWAY LOGIC PROTOTYPE</div>
+  <h1>Cargo Buy lock and explicit Wait</h1>
+  <p>This simplified Caravan model demonstrates the solver's built-in rule: a Buy containing trade cargo locks every later Buy until Sell. Food-only Buys are legal before that commitment. Wait uses empty-Buy timing and remains replayable here, but production search no longer generates it. It is explanatory—not the production solver.</p>
+
+  <section class="panel">
+    <h2>Current state</h2>
+    <div id="state" class="state"></div>
+    <p id="message" class="message"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Free play</h2>
+    <p>Every button consumes an action day. Food is consumed at the start of later days; crew income is paid at the end.</p>
+    <div id="free" class="buttons"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Guided walkthroughs</h2>
+    <div id="tabs" class="tabs"></div>
+    <div id="scenario"></div>
+  </section>
+</main>
+
+<script>
+const CargoModel = (() => {
+  const defaults = Object.freeze({
+    day: 0, gold: 150, food: 12, cargo: 0, capacity: 30,
+    traders: 1, camels: 1, foodUse: 2, income: 20,
+    cargoBuy: 20, cargoSell: 33, cargoLocked: false, message: "Ready."
+  });
+
+  const initial = overrides => ({ ...defaults, ...overrides });
+  const weight = state => state.food * 2 + state.cargo * 5;
+  const endDay = state => ({ ...state, gold: state.gold + state.income });
+  const beginDay = state => {
+    const food = state.day === 0 ? state.food : state.food - state.foodUse;
+    if (food < 0) return { error: "Not enough food to start this action day." };
+    return { state: { ...state, day: state.day + 1, food } };
+  };
+
+  function reduce(current, action) {
+    if (action.type === "reset") return initial(action.state || {});
+    const started = beginDay(current);
+    if (started.error) return { ...current, message: started.error };
+    let state = started.state;
+
+    if (action.type === "buy") {
+      const food = action.food || 0;
+      const cargo = action.cargo || 0;
+      if (current.cargoLocked) {
+        return { ...current, message: "Blocked: a cargo Buy already occurred; Sell before any other Buy." };
+      }
+      const cost = food * 3 + cargo * state.cargoBuy;
+      const finalWeight = weight(state) + food * 2 + cargo * 5;
+      if (cost > state.gold) return { ...current, message: "Blocked: insufficient gold." };
+      if (finalWeight > state.capacity) return { ...current, message: "Blocked: insufficient carrying capacity." };
+      return endDay({ ...state, gold: state.gold - cost, food: state.food + food, cargo: state.cargo + cargo, cargoLocked: state.cargoLocked || cargo > 0, message: `Bought ${food} food and ${cargo} cargo${cargo > 0 ? "; future Buys locked until Sell" : ""}.` });
+    }
+    if (action.type === "wait") {
+      return endDay({ ...state, message: "Waited using empty-Buy timing; cargo Buy lock is unchanged." });
+    }
+    if (action.type === "camel") {
+      if (state.gold < 30) return { ...current, message: "Blocked: Camel costs 30 gold." };
+      return endDay({ ...state, gold: state.gold - 30, camels: state.camels + 1, capacity: state.capacity + 30, foodUse: state.foodUse + 1, message: "Bought a Camel: +30 capacity, +1 daily food use." });
+    }
+    if (action.type === "trader") {
+      if (state.gold < 25) return { ...current, message: "Blocked: Trader costs 25 gold." };
+      return endDay({ ...state, gold: state.gold - 25, traders: state.traders + 1, income: state.income + 20, foodUse: state.foodUse + 1, message: "Bought a Trader: +20 end-of-day income, +1 daily food use." });
+    }
+    if (action.type === "sell") {
+      return endDay({ ...state, gold: state.gold + state.cargo * state.cargoSell, cargo: 0, cargoLocked: false, message: "Sold all cargo; Buy lock cleared." });
+    }
+    if (action.type === "interest") {
+      return endDay({ ...state, gold: Math.round(state.gold * 1.5), message: "Collected 50% interest." });
+    }
+    if (action.type === "price") {
+      return { ...state, cargoBuy: state.cargoBuy + 10, message: "Quick event: future cargo buy price increased by 10." };
+    }
+    return { ...current, message: "Unknown action." };
+  }
+
+  return { initial, reduce, weight };
+})();
+
+const actions = [
+  ["Buy 5 food", {type:"buy", food:5}],
+  ["Buy 2 cargo", {type:"buy", cargo:2}],
+  ["Buy 5 food + 2 cargo", {type:"buy", food:5, cargo:2}],
+  ["Wait (empty Buy)", {type:"wait"}],
+  ["Buy Camel", {type:"camel"}],
+  ["Buy Trader", {type:"trader"}],
+  ["Sell cargo", {type:"sell"}],
+  ["Collect Interest", {type:"interest"}],
+  ["Raise future buy price", {type:"price"}],
+  ["Reset", {type:"reset"}]
+];
+
+const scenarios = [
+  {
+    name:"Cargo commitment",
+    intro:"Build capacity first, then buy cargo. A second Buy is blocked until Sell clears the run-state checker.",
+    start:{gold:220, food:18, capacity:30},
+    steps:[["Buy Camel",{type:"camel"}],["Buy 2 cargo",{type:"buy",cargo:2}],["Try another Buy",{type:"buy",food:5}],["Sell and clear lock",{type:"sell"}],["Buy food",{type:"buy",food:5}]]
+  },
+  {
+    name:"Food before cargo",
+    intro:"Food-only Buys do not commit the cargo cycle. Buy food, add capacity, then make the one cargo Buy that locks later purchases.",
+    start:{gold:220, food:2, capacity:35},
+    steps:[["Buy food only",{type:"buy",food:5}],["Buy Camel",{type:"camel"}],["Buy food + cargo",{type:"buy",food:5,cargo:2}],["Sell",{type:"sell"}]]
+  },
+  {
+    name:"Visible stall",
+    intro:"Wait remains legal in the game model and route replay. It consumes a day using empty-Buy semantics and does not clear the cargo lock, but normal solver search does not generate this branch.",
+    start:{gold:180, food:15, capacity:45},
+    steps:[["Buy cargo",{type:"buy",cargo:2}],["Wait (empty Buy)",{type:"wait"}],["Try a Buy",{type:"buy",food:5}],["Sell and clear lock",{type:"sell"}]]
+  }
+];
+
+let state = CargoModel.initial();
+let selected = 0;
+const stateEl = document.querySelector("#state");
+const messageEl = document.querySelector("#message");
+
+function dispatch(action) {
+  state = CargoModel.reduce(state, action);
+  renderState();
+}
+
+function renderState() {
+  const fields = [
+    ["Day",state.day],["Gold",state.gold],["Food",state.food],["Food/day",state.foodUse],
+    ["Cargo",state.cargo],["Used weight",CargoModel.weight(state)],["Capacity",state.capacity],
+    ["Traders",state.traders],["Camels",state.camels],["Daily income",state.income],
+    ["Cargo buy",state.cargoBuy],["Cargo sell",state.cargoSell],["Cargo Buy lock",state.cargoLocked ? "LOCKED" : "open"]
+  ];
+  stateEl.innerHTML = fields.map(([label,value]) => `<div class="field"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  messageEl.textContent = state.message;
+  messageEl.classList.toggle("bad", state.message.startsWith("Blocked") || state.message.startsWith("Not enough"));
+}
+
+document.querySelector("#free").innerHTML = actions.map((entry,index) => `<button data-free="${index}">${entry[0]}</button>`).join("");
+document.querySelector("#free").addEventListener("click", event => {
+  const index = event.target.dataset.free;
+  if (index !== undefined) dispatch(actions[Number(index)][1]);
+});
+
+function renderScenario() {
+  document.querySelector("#tabs").innerHTML = scenarios.map((scenario,index) => `<button class="${index===selected?'active':''}" data-tab="${index}">${scenario.name}</button>`).join("");
+  const scenario = scenarios[selected];
+  document.querySelector("#scenario").innerHTML = `<p>${scenario.intro}</p><button id="scenario-reset">Reset this walkthrough</button><ol>${scenario.steps.map((step,index) => `<li>${step[0]} <button data-step="${index}">Do this</button></li>`).join("")}</ol>`;
+  document.querySelector("#scenario-reset").onclick = () => dispatch({type:"reset",state:scenario.start});
+  document.querySelector("#scenario").onclick = event => {
+    const index = event.target.dataset.step;
+    if (index !== undefined) dispatch(scenario.steps[Number(index)][1]);
+  };
+  dispatch({type:"reset",state:scenario.start});
+}
+
+document.querySelector("#tabs").addEventListener("click", event => {
+  const index = event.target.dataset.tab;
+  if (index !== undefined) { selected = Number(index); renderScenario(); }
+});
+
+renderScenario();
+</script>
+</body>
+</html>

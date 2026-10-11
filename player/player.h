@@ -23,11 +23,11 @@ struct Player {
     int marble = 0;
     int silk = 0;
     int jewelry = 0;
-    int fang_mo_pot = 0;
     // Crew
     int trader = 1;
     int camel = 1;
     int food_consumption = 2;
+    int bonus_food_consumption = 0;
     // Stores
     int item_shop[6][3] = {
         // Buy, Sell, Weight
@@ -56,11 +56,18 @@ struct Player {
     // Day Info
     int day = 0;
     int max_day = 15;
+    bool traveler_mode = false;
     bool merchant_happened = false;
+    int merchant_day = 0;
     bool call_merchant = false;
     bool witch_happened = false;
+    int witch_day = 0;
+    bool disaster_happened = false;
+    int disaster_day = 0;
+    disaster_options scheduled_disaster = d_No_Disaster;
     bool day_start_skip = false;
     bool bought_last = false;
+    bool cargo_buy_locked = false;
     std::vector<int> available_actions = {};
     int points = 0;
     uint32_t trace_id = 0;
@@ -83,10 +90,10 @@ struct Player {
         out.write(reinterpret_cast<const char*>(&marble), sizeof(marble));
         out.write(reinterpret_cast<const char*>(&silk), sizeof(silk));
         out.write(reinterpret_cast<const char*>(&jewelry), sizeof(jewelry));
-        out.write(reinterpret_cast<const char*>(&fang_mo_pot), sizeof(fang_mo_pot));
         out.write(reinterpret_cast<const char*>(&trader), sizeof(trader));
         out.write(reinterpret_cast<const char*>(&camel), sizeof(camel));
         out.write(reinterpret_cast<const char*>(&food_consumption), sizeof(food_consumption));
+        out.write(reinterpret_cast<const char*>(&bonus_food_consumption), sizeof(bonus_food_consumption));
         out.write(reinterpret_cast<const char*>(item_shop), sizeof(item_shop));
         out.write(reinterpret_cast<const char*>(npc_shop), sizeof(npc_shop));
         out.write(reinterpret_cast<const char*>(&backpack), sizeof(backpack));
@@ -100,11 +107,18 @@ struct Player {
         out.write(reinterpret_cast<const char*>(&trader_interest), sizeof(trader_interest));
         out.write(reinterpret_cast<const char*>(&day), sizeof(day));
         out.write(reinterpret_cast<const char*>(&max_day), sizeof(max_day));
+        out.write(reinterpret_cast<const char*>(&traveler_mode), sizeof(traveler_mode));
         out.write(reinterpret_cast<const char*>(&merchant_happened), sizeof(merchant_happened));
+        out.write(reinterpret_cast<const char*>(&merchant_day), sizeof(merchant_day));
         out.write(reinterpret_cast<const char*>(&call_merchant), sizeof(call_merchant));
         out.write(reinterpret_cast<const char*>(&witch_happened), sizeof(witch_happened));
+        out.write(reinterpret_cast<const char*>(&witch_day), sizeof(witch_day));
+        out.write(reinterpret_cast<const char*>(&disaster_happened), sizeof(disaster_happened));
+        out.write(reinterpret_cast<const char*>(&disaster_day), sizeof(disaster_day));
+        out.write(reinterpret_cast<const char*>(&scheduled_disaster), sizeof(scheduled_disaster));
         out.write(reinterpret_cast<const char*>(&day_start_skip), sizeof(day_start_skip));
         out.write(reinterpret_cast<const char*>(&bought_last), sizeof(bought_last));
+        out.write(reinterpret_cast<const char*>(&cargo_buy_locked), sizeof(cargo_buy_locked));
         out.write(reinterpret_cast<const char*>(&points), sizeof(points));
         out.write(reinterpret_cast<const char*>(&trace_id), sizeof(trace_id));
         out.write(reinterpret_cast<const char*>(&player_world), sizeof(player_world));
@@ -128,10 +142,10 @@ struct Player {
         in.read(reinterpret_cast<char*>(&marble), sizeof(marble));
         in.read(reinterpret_cast<char*>(&silk), sizeof(silk));
         in.read(reinterpret_cast<char*>(&jewelry), sizeof(jewelry));
-        in.read(reinterpret_cast<char*>(&fang_mo_pot), sizeof(fang_mo_pot));
         in.read(reinterpret_cast<char*>(&trader), sizeof(trader));
         in.read(reinterpret_cast<char*>(&camel), sizeof(camel));
         in.read(reinterpret_cast<char*>(&food_consumption), sizeof(food_consumption));
+        in.read(reinterpret_cast<char*>(&bonus_food_consumption), sizeof(bonus_food_consumption));
         in.read(reinterpret_cast<char*>(item_shop), sizeof(item_shop));
         in.read(reinterpret_cast<char*>(npc_shop), sizeof(npc_shop));
         in.read(reinterpret_cast<char*>(&backpack), sizeof(backpack));
@@ -145,11 +159,18 @@ struct Player {
         in.read(reinterpret_cast<char*>(&trader_interest), sizeof(trader_interest));
         in.read(reinterpret_cast<char*>(&day), sizeof(day));
         in.read(reinterpret_cast<char*>(&max_day), sizeof(max_day));
+        in.read(reinterpret_cast<char*>(&traveler_mode), sizeof(traveler_mode));
         in.read(reinterpret_cast<char*>(&merchant_happened), sizeof(merchant_happened));
+        in.read(reinterpret_cast<char*>(&merchant_day), sizeof(merchant_day));
         in.read(reinterpret_cast<char*>(&call_merchant), sizeof(call_merchant));
         in.read(reinterpret_cast<char*>(&witch_happened), sizeof(witch_happened));
+        in.read(reinterpret_cast<char*>(&witch_day), sizeof(witch_day));
+        in.read(reinterpret_cast<char*>(&disaster_happened), sizeof(disaster_happened));
+        in.read(reinterpret_cast<char*>(&disaster_day), sizeof(disaster_day));
+        in.read(reinterpret_cast<char*>(&scheduled_disaster), sizeof(scheduled_disaster));
         in.read(reinterpret_cast<char*>(&day_start_skip), sizeof(day_start_skip));
         in.read(reinterpret_cast<char*>(&bought_last), sizeof(bought_last));
+        in.read(reinterpret_cast<char*>(&cargo_buy_locked), sizeof(cargo_buy_locked));
         in.read(reinterpret_cast<char*>(&points), sizeof(points));
         in.read(reinterpret_cast<char*>(&trace_id), sizeof(trace_id));
         in.read(reinterpret_cast<char*>(&player_world), sizeof(player_world));

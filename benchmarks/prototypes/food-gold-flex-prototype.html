@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — Deferred food / gold flex</title>
+  <style>
+    :root { color-scheme:dark; --bg:#0f1418; --panel:#192128; --panel2:#11181e; --line:#30404a; --ink:#eef5f7; --muted:#9db0b9; --accent:#5bd2a9; --warn:#ffd079; --bad:#ff8f87; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,sans-serif; }
+    main { width:min(1120px,calc(100% - 32px)); margin:34px auto 64px; }
+    h1,h2,h3 { margin:.2em 0 .5em; }
+    p { max-width:90ch; color:var(--muted); }
+    .badge { color:var(--accent); font-size:.77rem; font-weight:800; letter-spacing:.09em; }
+    .panel { margin:18px 0; padding:18px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+    .state { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+    .field,.variant { padding:11px 13px; border-radius:10px; background:var(--panel2); }
+    .field span { display:block; color:var(--muted); font-size:.74rem; letter-spacing:.05em; text-transform:uppercase; }
+    .field strong { font-size:1.12rem; }
+    .buttons,.tabs { display:flex; flex-wrap:wrap; gap:8px; }
+    button { padding:9px 12px; border:1px solid var(--line); border-radius:9px; color:var(--ink); background:#24323b; cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    button:disabled { opacity:.42; cursor:not-allowed; }
+    .tabs button.active { color:#082018; background:var(--accent); border-color:var(--accent); }
+    .message { color:var(--accent); font-weight:700; }
+    .message.bad { color:var(--bad); }
+    .warning { color:var(--warn); }
+    .variants { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; }
+    .variant.chosen { outline:2px solid var(--accent); }
+    .variant strong { display:block; color:var(--accent); }
+    .variant span { display:block; color:var(--muted); }
+    ol { padding-left:22px; }
+    li { margin:8px 0; color:var(--muted); }
+    li button { margin-left:8px; }
+    code { color:var(--ink); }
+  </style>
+</head>
+<body>
+<main>
+  <div class="badge">THROWAWAY LOGIC PROTOTYPE</div>
+  <h1>Can one food/gold flex state replace many food-Buy states?</h1>
+  <p>This demo keeps every still-feasible food amount from one earlier Buy inside a single symbolic state. At each night, variants without enough food disappear; the smallest survivor becomes the amount now committed to food, and its original Buy cost is the flex gold used. Crew purchases and Interest update every surviving variant exactly. At Sell, the next Buy, or the finish, the state resolves the old Buy to its smallest surviving food amount.</p>
+
+  <section class="panel">
+    <h2>Symbolic state</h2>
+    <div id="state" class="state"></div>
+    <p id="message" class="message"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Free play</h2>
+    <p>Each action includes the next start-of-day food payment and the correct end-of-day Trader income. The original food capacity never expands retroactively when a later Camel is hired.</p>
+    <div id="free" class="buttons"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Still-feasible original Buy choices</h2>
+    <p>These are alternatives inside one symbolic state, not separate search states. Gold already reflects what each food amount would really have cost at the original Buy.</p>
+    <div id="variants" class="variants"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Guided walkthroughs</h2>
+    <div id="tabs" class="tabs"></div>
+    <div id="scenario"></div>
+  </section>
+</main>
+
+<script>
+const FoodGoldFlex = (() => {
+  const defaults=Object.freeze({
+    day:1,maxDay:15,traders:1,camels:1,traderEat:1,camelEat:1,bonus:0,
+    traderCost:25,camelCost:30,traderIncome:20,dailyIncome:0,
+    interestHundredths:150,setInterest:false,
+    foodAtBuy:0,foodPrice:3,foodWeight:2,goldAfterCargoBeforeIncome:30,
+    freeWeightAtBuy:20,cargoSellGold:0,cargoLocked:false,boughtLast:true,
+    flexOpen:true,resolvedUnits:null,
+    variants:[],message:"Opened one deferred food choice at the original Buy.",dead:false
+  });
+
+  const foodRate=state=>state.traders*state.traderEat+state.camels*state.camelEat+state.bonus;
+  const income=state=>state.dailyIncome+state.traders*state.traderIncome;
+  const minBy=(items,key)=>items.length?Math.min(...items.map(item=>item[key])):null;
+  const maxBy=(items,key)=>items.length?Math.max(...items.map(item=>item[key])):null;
+
+  function open(overrides={}) {
+    const base={...defaults,...overrides};
+    const maxByGold=base.foodPrice<=0?255:Math.floor(base.goldAfterCargoBeforeIncome/base.foodPrice);
+    const maxByWeight=base.foodWeight<=0?255:Math.floor(base.freeWeightAtBuy/base.foodWeight);
+    const maxUnits=Math.max(0,Math.min(maxByGold,maxByWeight,255));
+    const buyIncome=income(base);
+    const variants=[];
+    for(let units=0;units<=maxUnits;units+=1){
+      variants.push({
+        units,
+        food:base.foodAtBuy+units,
+        gold:base.goldAfterCargoBeforeIncome-units*base.foodPrice+buyIncome
+      });
+    }
+    return {...base,variants,originalMaxUnits:maxUnits,capacityAddedLater:0};
+  }
+
+  function summarize(state){
+    const minUnits=minBy(state.variants,"units");
+    return {
+      variants:state.variants.length,
+      minUnits,
+      maxUnits:maxBy(state.variants,"units"),
+      committedGold:minUnits===null?null:minUnits*state.foodPrice,
+      minGold:minBy(state.variants,"gold"),maxGold:maxBy(state.variants,"gold"),
+      minFood:minBy(state.variants,"food"),maxFood:maxBy(state.variants,"food")
+    };
+  }
+
+  function fail(state,message){return {...state,variants:[],dead:true,message};}
+  function block(state,message){return {...state,message};}
+
+  function startDay(state){
+    if(state.dead||state.day>=state.maxDay)return fail(state,"No later action day is available.");
+    const before=summarize(state);
+    const cost=foodRate(state);
+    const variants=state.variants
+      .map(variant=>({...variant,food:variant.food-cost}))
+      .filter(variant=>variant.food>=0);
+    if(!variants.length)return fail({...state,day:state.day+1},`No original food amount can pay the signed ${cost}-food start of day.`);
+    const next={...state,day:state.day+1,variants};
+    const after=summarize(next);
+    const committed=after.minUnits-before.minUnits;
+    const detail=committed>0
+      ? ` Nightly need committed ${committed} more original food (${committed*state.foodPrice} flex gold).`
+      : " No additional food was committed.";
+    return {...next,message:`Started day ${next.day}: ${cost} food per variant.${detail}`};
+  }
+
+  function addIncome(state){
+    const earned=income(state);
+    return {...state,variants:state.variants.map(variant=>({...variant,gold:variant.gold+earned})),message:`${state.message} End-of-day income added ${earned} gold.`};
+  }
+
+  function spend(state,cost,label){
+    const variants=state.variants.filter(variant=>variant.gold>=cost).map(variant=>({...variant,gold:variant.gold-cost}));
+    if(!variants.length)return fail(state,`No food/gold choice can afford ${label} for ${cost} gold.`);
+    return {...state,variants,message:`${state.message} ${label} cost ${cost}; unaffordable food variants were removed.`};
+  }
+
+  function ordinaryDay(state){
+    const started=startDay(state);if(started.dead)return started;
+    return addIncome({...started,boughtLast:false});
+  }
+
+  function traderDay(state){
+    let next=startDay(state);if(next.dead)return next;
+    next=spend(next,next.traderCost,"Trader");if(next.dead)return next;
+    next={...next,traders:next.traders+1,boughtLast:false};
+    return addIncome(next);
+  }
+
+  function camelDay(state){
+    let next=startDay(state);if(next.dead)return next;
+    next=spend(next,next.camelCost,"Camel");if(next.dead)return next;
+    next={...next,camels:next.camels+1,capacityAddedLater:next.capacityAddedLater+30,boughtLast:false};
+    return addIncome(next);
+  }
+
+  function interestDay(state){
+    let next=startDay(state);if(next.dead)return next;
+    const rate=next.interestHundredths/100;
+    const variants=next.variants.map(variant=>({...variant,gold:Math.round(rate*variant.gold+0.25)}));
+    const interestHundredths=next.setInterest?next.interestHundredths:Math.max(10,next.interestHundredths-10);
+    next={...next,variants,interestHundredths,boughtLast:false,message:`${next.message} Interest was applied independently to every food/gold choice.`};
+    return addIncome(next);
+  }
+
+  function resolve(state,label,consumeDay){
+    if(label==="next Buy"&&state.boughtLast)return block(state,"Blocked: a second Buy is not legal immediately after the original Buy.");
+    if(label==="next Buy"&&state.cargoLocked)return block(state,"Blocked: the original Buy contained cargo; Sell must clear the cargo lock before another Buy.");
+    let next=consumeDay?startDay(state):state;if(next.dead)return next;
+    if(label==="Sell"){
+      next={...next,variants:next.variants.map(variant=>({...variant,gold:variant.gold+next.cargoSellGold})),cargoLocked:false,boughtLast:false};
+      next=addIncome(next);
+    }
+    const chosen=[...next.variants].sort((a,b)=>a.units-b.units||b.gold-a.gold)[0];
+    return {
+      ...next,variants:[chosen],flexOpen:false,resolvedUnits:chosen.units,
+      message:`Resolved at ${label}: rewrite the original route action as Buy [${chosen.units} food, fixed cargo].`
+    };
+  }
+
+  function reduce(state,action){
+    if(action.type==="reset")return open(action.state||{});
+    if(state.dead)return state;
+    if(action.type==="ordinary")return ordinaryDay(state);
+    if(action.type==="trader")return traderDay(state);
+    if(action.type==="camel")return camelDay(state);
+    if(action.type==="interest")return interestDay(state);
+    if(action.type==="next-buy")return resolve(state,"next Buy",true);
+    if(action.type==="sell")return resolve(state,"Sell",true);
+    if(action.type==="finish")return resolve(state,"finish",false);
+    return state;
+  }
+
+  return {open,reduce,summarize,foodRate,income};
+})();
+
+const freeActions=[
+  ["Ordinary action day",{type:"ordinary"}],
+  ["Buy Trader day",{type:"trader"}],
+  ["Buy Camel day",{type:"camel"}],
+  ["Collect Interest day",{type:"interest"}],
+  ["Next Buy: resolve",{type:"next-buy"}],
+  ["Sell: resolve",{type:"sell"}],
+  ["Finish: resolve",{type:"finish"}],
+  ["Reset",{type:"reset"}]
+];
+
+const scenarios=[
+  {
+    name:"Nightly commitment",
+    intro:"Each night removes food choices that could not have survived. The commitment floor rises only when the realized path needs it, then the original Buy is rewritten at the next Buy.",
+    start:{goldAfterCargoBeforeIncome:30,freeWeightAtBuy:20,foodAtBuy:0},
+    steps:[["Ordinary day",{type:"ordinary"}],["Hire Trader",{type:"trader"}],["Ordinary day",{type:"ordinary"}],["Resolve at next Buy",{type:"next-buy"}]]
+  },
+  {
+    name:"Gold and food collide",
+    intro:"High-food variants have less gold because that food was really purchased earlier. A Trader action can remove those variants even though the symbolic state has not selected one quantity yet.",
+    start:{goldAfterCargoBeforeIncome:30,freeWeightAtBuy:20,foodAtBuy:0,traderCost:35},
+    steps:[["Hire expensive Trader",{type:"trader"}],["Ordinary day",{type:"ordinary"}],["Ordinary day",{type:"ordinary"}]]
+  },
+  {
+    name:"Interest is exact",
+    intro:"Interest is why one scalar reserved-gold value is unsafe. Every possible original food purchase has a different gold balance, so rounding and multiplication are applied to each surviving choice before resolution.",
+    start:{goldAfterCargoBeforeIncome:60,freeWeightAtBuy:30,foodAtBuy:0,interestHundredths:150},
+    steps:[["Collect Interest",{type:"interest"}],["Hire Trader",{type:"trader"}],["Resolve at next Buy",{type:"next-buy"}]]
+  },
+  {
+    name:"Capacity stays historical",
+    intro:"A later Camel increases future capacity, but it cannot make the earlier Buy carry more food. The original maximum remains fixed while the food commitment floor rises.",
+    start:{goldAfterCargoBeforeIncome:100,freeWeightAtBuy:8,foodAtBuy:0},
+    steps:[["Hire Camel",{type:"camel"}],["Ordinary day",{type:"ordinary"}],["Ordinary day",{type:"ordinary"}]]
+  }
+];
+
+let state=FoodGoldFlex.open();
+let selected=0;
+
+function dispatch(action){state=FoodGoldFlex.reduce(state,action);render();}
+
+function render(){
+  const summary=FoodGoldFlex.summarize(state);
+  const fields=[
+    ["Day",`${state.day}/${state.maxDay}`],["Food/day",FoodGoldFlex.foodRate(state)],
+    ["Traders",state.traders],["Camels",state.camels],["End-day income",FoodGoldFlex.income(state)],
+    ["Food choices",summary.variants],["Food range",summary.minUnits===null?"none":`${summary.minUnits}–${summary.maxUnits}`],
+    ["Committed food",summary.minUnits??"none"],["Flex gold used",summary.committedGold??"none"],
+    ["Gold range",summary.minGold===null?"none":`${summary.minGold}–${summary.maxGold}`],
+    ["Remaining food range",summary.minFood===null?"none":`${summary.minFood}–${summary.maxFood}`],
+    ["Original max food",state.originalMaxUnits],["Later capacity added",state.capacityAddedLater],
+    ["Interest",(state.interestHundredths/100).toFixed(2)],["Cargo Buy lock",state.cargoLocked?"LOCKED":"open"],
+    ["Bought last",state.boughtLast?"yes":"no"],["Resolved Buy food",state.resolvedUnits??"pending"]
+  ];
+  document.querySelector("#state").innerHTML=fields.map(([label,value])=>`<div class="field"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  const message=document.querySelector("#message");message.textContent=state.message;message.classList.toggle("bad",state.dead);
+  document.querySelector("#variants").innerHTML=state.variants.map(variant=>`<div class="variant ${state.resolvedUnits===variant.units?"chosen":""}"><strong>${variant.units} food at old Buy</strong><span>${variant.units*state.foodPrice} original gold spent</span><span>${variant.gold} gold now</span><span>${variant.food} food remains</span></div>`).join("")||`<p class="warning">No feasible original food purchase remains. This action path was impossible.</p>`;
+  document.querySelectorAll("#free button").forEach((button,index)=>{button.disabled=state.dead&&freeActions[index][1].type!=="reset";});
+}
+
+document.querySelector("#free").innerHTML=freeActions.map((entry,index)=>`<button data-free="${index}">${entry[0]}</button>`).join("");
+document.querySelector("#free").onclick=event=>{const index=event.target.dataset.free;if(index!==undefined)dispatch(freeActions[Number(index)][1]);};
+
+function renderScenario(){
+  document.querySelector("#tabs").innerHTML=scenarios.map((scenario,index)=>`<button class="${index===selected?"active":""}" data-tab="${index}">${scenario.name}</button>`).join("");
+  const scenario=scenarios[selected];
+  document.querySelector("#scenario").innerHTML=`<p>${scenario.intro}</p><button id="scenario-reset">Reset this walkthrough</button><ol>${scenario.steps.map((step,index)=>`<li>${step[0]} <button data-step="${index}">Do this</button></li>`).join("")}</ol>`;
+  document.querySelector("#scenario-reset").onclick=()=>dispatch({type:"reset",state:scenario.start});
+  document.querySelector("#scenario").onclick=event=>{const index=event.target.dataset.step;if(index!==undefined)dispatch(scenario.steps[Number(index)][1]);};
+  dispatch({type:"reset",state:scenario.start});
+}
+
+document.querySelector("#tabs").onclick=event=>{const index=event.target.dataset.tab;if(index!==undefined){selected=Number(index);renderScenario();}};
+renderScenario();
+</script>
+</body>
+</html>

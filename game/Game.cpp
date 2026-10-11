@@ -4,22 +4,128 @@
 
 #include <cmath>
 #include <bits/stdc++.h>
+#include <stdexcept>
 #include "Game.h"
 
 class negative_gold_error : public std::exception {};
 class negative_food_error : public std::exception {};
 
+namespace {
+int round_three_quarters_to_even(const int value) {
+    const int64_t numerator = static_cast<int64_t>(value) * 3;
+    const int64_t quotient = numerator / 4;
+    const int64_t remainder = numerator % 4;
+    const int64_t absolute_remainder = std::abs(remainder);
+    if (absolute_remainder < 2) {
+        return static_cast<int>(quotient);
+    }
+    const int64_t direction = numerator < 0 ? -1 : 1;
+    if (absolute_remainder > 2 || std::abs(quotient) % 2 != 0) {
+        return static_cast<int>(quotient + direction);
+    }
+    return static_cast<int>(quotient);
+}
+}
+
+void Game::recalculate_food_consumption(Player &player) {
+    player.food_consumption =
+        player.trader * player.npc_shop[n_Trader][nd_Eat] +
+        player.camel * player.npc_shop[n_Camel][nd_Eat] +
+        player.bonus_food_consumption;
+}
+
+void Game::apply_traveler_upgrade(Player &player, const traveler_upgrades upgrade) {
+    switch (upgrade) {
+        case tu_Weight:
+            player.backpack += 10;
+            break;
+        case tu_Gold:
+            player.gold += 10;
+            break;
+        case tu_Pottery:
+            player.item_shop[i_Pottery][id_Buy] -= 5;
+            break;
+        case tu_Marble:
+            player.item_shop[i_Marble][id_Weight] -= 5;
+            break;
+        case tu_Jewelry:
+            player.item_shop[i_Jewelry][id_Sell] += 300;
+            break;
+        case tu_Trader:
+            player.npc_shop[n_Trader][nd_Cost] -= 10;
+            break;
+        case tu_Camel:
+            player.npc_shop[n_Camel][nd_Cost] = 0;
+            break;
+        case tu_Traders_Income:
+            player.npc_shop[n_Trader][nd_Effect] += 5;
+            break;
+        case tu_Load_Capacity:
+            player.npc_shop[n_Camel][nd_Effect] += 5;
+            break;
+        case tu_Saving:
+            player.interest_rate += 0.05;
+            break;
+    }
+}
+
+Player Game::create_traveler_player(
+    const town_options town,
+    const std::array<traveler_upgrades, 3>& upgrades,
+    const int merchant_day,
+    const int witch_day,
+    const int disaster_day,
+    const disaster_options disaster
+) {
+    std::array<bool, std::size(ALL_TRAVELER_UPGRADES)> selected{};
+    for (const traveler_upgrades upgrade : upgrades) {
+        const size_t index = static_cast<size_t>(upgrade);
+        if (index >= selected.size() || selected[index]) {
+            throw std::invalid_argument("Traveler requires three distinct valid preparation upgrades");
+        }
+        selected[index] = true;
+    }
+    if ((disaster == d_No_Disaster) != (disaster_day == 0) ||
+        (disaster != d_No_Disaster && (disaster_day < 15 || disaster_day > 17))) {
+        throw std::invalid_argument("Traveler disaster scenario requires one disaster on day 15, 16, or 17");
+    }
+    if ((merchant_day != 0 && (merchant_day < 7 || merchant_day > 9)) ||
+        (witch_day != 0 && (witch_day < 11 || witch_day > 13))) {
+        throw std::invalid_argument("Traveler encounter days must be Merchant 7-9 and Witch 11-13");
+    }
+
+    Player player;
+    player.gold = 10;
+    player.trader = 0;
+    player.camel = 0;
+    player.backpack = 20;
+    player.max_day = 20;
+    player.traveler_mode = true;
+    recalculate_food_consumption(player);
+
+    // The recovered GlobalVariables.Start calls PrepareUpdate before FactionImpact.
+    for (const traveler_upgrades upgrade : upgrades) {
+        apply_traveler_upgrade(player, upgrade);
+    }
+    apply_town(player, town);
+    player.merchant_day = merchant_day;
+    player.witch_day = witch_day;
+    player.disaster_day = disaster_day;
+    player.scheduled_disaster = disaster;
+    return player;
+}
+
 void Game::apply_town(Player &player, const town_options &town) {
     switch (town) {
         case t_Normalia:  // 00 - No Effect
             break;
-        case t_Fang_Mo:  // 01 - Begin with 1 Pottery (weightless)
-            player.fang_mo_pot += 1;
+        case t_Fang_Mo:  // 01 - Begin with 1 Pottery
+            player.pottery += 1;
             player.player_world.town = t_Fang_Mo;
             break;
         case t_L_Exquise:  // 02 - Traders don't need Food
-            player.food_consumption -= (player.npc_shop[n_Trader][nd_Eat] * player.trader);
             player.npc_shop[n_Trader][nd_Eat] = 0;
+            recalculate_food_consumption(player);
             player.player_world.town = t_L_Exquise;
             break;
         case t_Mahaji:  // 03 - Spice sell +5
@@ -92,8 +198,8 @@ void Game::apply_town(Player &player, const town_options &town) {
             player.player_world.town = t_Sanctifan;
             break;
         case t_Mehaz:  // 20 - Camels don't need food
-            player.food_consumption -= (player.npc_shop[n_Camel][nd_Eat] * player.camel);
             player.npc_shop[n_Camel][nd_Eat] = 0;
+            recalculate_food_consumption(player);
             player.player_world.town = t_Mehaz;
             break;
         case t_Ipartus:  // 21 - Silk Cost -100
@@ -121,6 +227,9 @@ void Game::full_day(Player &player, const ga_data &event) {
         case _a_buy:
             event_buy_items(player, event.buy_data);
             break;
+        case _a_wait:
+            event_wait(player);
+            break;
         case _a_sell:
             event_sell_items(player);
             break;
@@ -135,6 +244,9 @@ void Game::full_day(Player &player, const ga_data &event) {
             break;
         case _a_witch:
             event_witch(player, event.witch_data);
+            break;
+        case _a_disaster:
+            event_disaster(player, event.disaster_data);
             break;
     }
 }
@@ -179,6 +291,9 @@ void Game::event_buy_items(Player &player, const buy_list &to_buy) {
     player.marble += to_buy.marble;
     player.silk += to_buy.silk;
     player.jewelry += to_buy.jewelry;
+    if (to_buy.spice > 0 || to_buy.pottery > 0 || to_buy.marble > 0 || to_buy.silk > 0 || to_buy.jewelry > 0) {
+        player.cargo_buy_locked = true;
+    }
     player.bought_last = true;
 
     std::stringstream action;
@@ -187,20 +302,25 @@ void Game::event_buy_items(Player &player, const buy_list &to_buy) {
     end_of_day(player, action.str());
 }
 
+void Game::event_wait(Player &player) {
+    event_buy_items(player, buy_list());
+    player.last_action = std::to_string(player.day) + ": Wait (empty Buy)";
+}
+
 void Game::event_sell_items(Player &player) {
     player.gold += player.spice * player.item_shop[i_Spice][id_Sell] +
-            (player.pottery + player.fang_mo_pot) * player.item_shop[i_Pottery][id_Sell] +
+            player.pottery * player.item_shop[i_Pottery][id_Sell] +
              player.marble * player.item_shop[i_Marble][id_Sell] +
              player.silk * player.item_shop[i_Silk][id_Sell] +
              player.jewelry * player.item_shop[i_Jewelry][id_Sell] +
                    (player.hand_of_midas ? 100 : 0);
     player.spice = 0;
     player.pottery = 0;
-    player.fang_mo_pot = 0;
     player.marble = 0;
     player.silk = 0;
     player.jewelry = 0;
     player.bought_last = false;
+    player.cargo_buy_locked = false;
 
     end_of_day(player, "Sell");
 }
@@ -209,7 +329,7 @@ void Game::event_buy_npc(Player &player, const npcs &selection) {
     if (selection == n_Trader && player.gold >= player.npc_shop[n_Trader][nd_Cost]) {
         player.gold -= player.npc_shop[n_Trader][nd_Cost];
         player.trader += 1;
-        player.food_consumption += player.npc_shop[n_Trader][nd_Eat];
+        recalculate_food_consumption(player);
         player.interest_rate += player.trader_interest ? 0.1 : 0;
         player.bought_last = false;
         end_of_day(player, "Trader");
@@ -217,7 +337,7 @@ void Game::event_buy_npc(Player &player, const npcs &selection) {
     if (selection == n_Camel && player.gold >= player.npc_shop[n_Camel][nd_Cost]) {
         player.gold -= player.npc_shop[n_Camel][nd_Cost];
         player.camel += 1;
-        player.food_consumption += player.npc_shop[n_Camel][nd_Eat];
+        recalculate_food_consumption(player);
         player.bought_last = false;
         end_of_day(player, "Camel");
     }
@@ -245,11 +365,16 @@ void Game::event_interest(Player &player) {
 bool Game::event_merchant(Player &player, const merch_options &selection) {
     switch (selection) {
         case m_No_Merchant:
-            break;
+            player.last_action = "Merch - " + mo_conversion.at(m_No_Merchant);
+            player.merchant_happened = true;
+            player.day_start_skip = true;
+            player.player_world.merch = m_No_Merchant;
+            return true;
         case m_Cornucopia: // +2 food every turn
             if (player.gold >= (player.merch_discount ? 20 : 25)) {
                 player.gold -= (player.merch_discount ? 20 : 25);
-                player.food_consumption = std::max(player.food_consumption - 2, 0);
+                player.bonus_food_consumption = player.food_consumption <= 1 ? -1 : -2;
+                recalculate_food_consumption(player);
                 player.last_action = "Merch - " + mo_conversion.at(m_Cornucopia);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
@@ -294,8 +419,7 @@ bool Game::event_merchant(Player &player, const merch_options &selection) {
             if (player.gold >= (player.merch_discount ? 40 : 50)) {
                 player.gold -= (player.merch_discount ? 40 : 50);
                 player.trader += 1;
-                player.food_consumption += player.npc_shop[n_Trader][nd_Eat];
-                player.interest_rate += player.trader_interest ? 0.1 : 0; // TODO Should this happen?
+                recalculate_food_consumption(player);
                 player.last_action = "Merch - " + mo_conversion.at(m_Leaders_Necklace);
                 player.merchant_happened = true;
                 player.day_start_skip = true;
@@ -357,7 +481,7 @@ void Game::event_witch(Player &player, const witch_options &selection) {
             break;
         case w_Presents_Gift: // +20 weight, -20% Saving
             player.backpack += 20;
-            player.interest_rate = std::max(player.interest_rate - 0.2, 0.1) ;
+            player.interest_rate = std::max(player.interest_rate - 0.2, 0.0) ;
             player.last_action = "Witch - " + wo_conversion.at(w_Presents_Gift);
             player.witch_happened = true;
             player.day_start_skip = true;
@@ -373,7 +497,7 @@ void Game::event_witch(Player &player, const witch_options &selection) {
             break;
         case w_Midas_was_a_Trader: // +150 Trader earn, -300 Marble sell
             player.npc_shop[n_Trader][nd_Effect] += 150;
-            player.item_shop[i_Marble][id_Sell] *= 0;
+            player.item_shop[i_Marble][id_Sell] = 0;
             player.last_action = "Witch - " + wo_conversion.at(w_Midas_was_a_Trader);
             player.witch_happened = true;
             player.day_start_skip = true;
@@ -381,8 +505,8 @@ void Game::event_witch(Player &player, const witch_options &selection) {
             break;
         case w_Camelization: // +10 Camel weight, +1 Camel food cost
             player.npc_shop[n_Camel][nd_Effect] += 10;
-            player.food_consumption += player.npc_shop[n_Camel][nd_Eat] * player.camel;
             player.npc_shop[n_Camel][nd_Eat] *= 2;
+            recalculate_food_consumption(player);
             player.last_action = "Witch - " + wo_conversion.at(w_Camelization);
             player.witch_happened = true;
             player.day_start_skip = true;
@@ -397,9 +521,8 @@ void Game::event_witch(Player &player, const witch_options &selection) {
             player.player_world.witch = w_Time_is_Money;
             break;
         case w_Animal_Lover: // +2 Camels, -1 Day
-            // The granted camels should add their normal food cost once.
             player.camel += 2;
-            player.food_consumption += player.npc_shop[n_Camel][nd_Eat] * 2;
+            recalculate_food_consumption(player);
             player.max_day -= 1;
             player.last_action = "Witch - " + wo_conversion.at(w_Animal_Lover);
             player.witch_happened = true;
@@ -409,7 +532,8 @@ void Game::event_witch(Player &player, const witch_options &selection) {
         case w_Oasis_of_Sanctifan: // Crew don't eat, +200 Silk buy
             player.npc_shop[n_Trader][nd_Eat] = 0;
             player.npc_shop[n_Camel][nd_Eat] = 0;
-            player.food_consumption = 0;
+            player.bonus_food_consumption = 0;
+            recalculate_food_consumption(player);
             player.item_shop[i_Silk][id_Buy] += 200;
             player.last_action = "Witch - " + wo_conversion.at(w_Oasis_of_Sanctifan);
             player.witch_happened = true;
@@ -425,6 +549,58 @@ void Game::event_witch(Player &player, const witch_options &selection) {
             player.player_world.witch = w_The_Stonecutter;
             break;
     }
+}
+
+void Game::event_disaster(Player &player, const disaster_options &selection) {
+    switch (selection) {
+        case d_No_Disaster:
+            return;
+        case d_Steal:
+            player.gold = round_three_quarters_to_even(player.gold);
+            break;
+        case d_Brokeleg:
+            player.backpack -= 10;
+            break;
+        case d_Tradersleft:
+            player.trader = 0;
+            recalculate_food_consumption(player);
+            break;
+        case d_Marblecrisis:
+            player.item_shop[i_Marble][id_Sell] = 0;
+            break;
+        case d_Savingcrisis:
+            player.interest_rate -= 0.3;
+            break;
+        case d_Silkpenury:
+            player.item_shop[i_Silk][id_Buy] += 200;
+            break;
+        case d_Seer:
+            player.max_day += 1;
+            player.camel -= 1;
+            recalculate_food_consumption(player);
+            break;
+        case d_Heavyfood:
+            player.item_shop[i_Food][id_Weight] *= 2;
+            break;
+        case d_Jewelrycrisis:
+            player.item_shop[i_Jewelry][id_Sell] -= 700;
+            break;
+        case d_Silkcrisis:
+            player.item_shop[i_Silk][id_Sell] -= 350;
+            break;
+        case d_Foodcrisis:
+            player.item_shop[i_Food][id_Buy] = 15;
+            break;
+        case d_Camelsick:
+            player.npc_shop[n_Camel][nd_Eat] *= 2;
+            recalculate_food_consumption(player);
+            break;
+    }
+
+    player.last_action = "Disaster - " + do_conversion.at(selection);
+    player.disaster_happened = true;
+    player.day_start_skip = true;
+    player.player_world.disaster = selection;
 }
 
 bool Game::check__afford_merchant(Player &player, const merch_options &selection) {
@@ -457,7 +633,11 @@ bool Game::check__afford_merchant(Player &player, const merch_options &selection
 }
 
 int Game::check_has_items(const Player &player) {
-    return (player.spice + player.pottery + player.marble + player.silk + player.jewelry + player.fang_mo_pot) > 0;
+    return (player.spice + player.pottery + player.marble + player.silk + player.jewelry) > 0;
+}
+
+bool Game::check_can_buy_items(const Player &player) {
+    return !player.cargo_buy_locked;
 }
 
 int Game::check_points(const Player &player, const std::string &type) {
@@ -466,7 +646,7 @@ int Game::check_points(const Player &player, const std::string &type) {
     // Statue is worth too much
     return (player.gold +
             (player.spice * player.item_shop[i_Spice][id_Buy]) +
-            ((player.pottery + player.fang_mo_pot) * player.item_shop[i_Pottery][id_Buy]) +
+            (player.pottery * player.item_shop[i_Pottery][id_Buy]) +
             (player.marble * player.item_shop[i_Marble][id_Buy]) +
             (player.silk * player.item_shop[i_Silk][id_Buy]) +
             (player.jewelry * player.item_shop[i_Jewelry][id_Buy]) +

@@ -105,6 +105,88 @@ const std::unordered_map<witch_options, const std::string> wo_conversion = {
         {w_The_Stonecutter, "The Stonecutter"}
 };
 
+enum disaster_options: uint8_t {
+    d_No_Disaster = 0,
+    d_Steal,
+    d_Brokeleg,
+    d_Tradersleft,
+    d_Marblecrisis,
+    d_Savingcrisis,
+    d_Silkpenury,
+    d_Seer,
+    d_Heavyfood,
+    d_Jewelrycrisis,
+    d_Silkcrisis,
+    d_Foodcrisis,
+    d_Camelsick
+};
+const disaster_options ALL_DISASTER_OPTIONS[] = {
+    d_Steal,
+    d_Brokeleg,
+    d_Tradersleft,
+    d_Marblecrisis,
+    d_Savingcrisis,
+    d_Silkpenury,
+    d_Seer,
+    d_Heavyfood,
+    d_Jewelrycrisis,
+    d_Silkcrisis,
+    d_Foodcrisis,
+    d_Camelsick
+};
+const std::unordered_map<disaster_options, const std::string> do_conversion = {
+    {d_No_Disaster,    "No Disaster"},
+    {d_Steal,          "Steal"},
+    {d_Brokeleg,       "Brokeleg"},
+    {d_Tradersleft,    "Tradersleft"},
+    {d_Marblecrisis,   "Marblecrisis"},
+    {d_Savingcrisis,   "Savingcrisis"},
+    {d_Silkpenury,     "Silkpenury"},
+    {d_Seer,           "Seer"},
+    {d_Heavyfood,      "Heavyfood"},
+    {d_Jewelrycrisis,  "Jewelrycrisis"},
+    {d_Silkcrisis,     "Silkcrisis"},
+    {d_Foodcrisis,     "Foodcrisis"},
+    {d_Camelsick,      "Camelsick"}
+};
+
+enum traveler_upgrades: uint8_t {
+    tu_Weight = 0,
+    tu_Gold,
+    tu_Pottery,
+    tu_Marble,
+    tu_Jewelry,
+    tu_Trader,
+    tu_Camel,
+    tu_Traders_Income,
+    tu_Load_Capacity,
+    tu_Saving
+};
+const traveler_upgrades ALL_TRAVELER_UPGRADES[] = {
+    tu_Weight,
+    tu_Gold,
+    tu_Pottery,
+    tu_Marble,
+    tu_Jewelry,
+    tu_Trader,
+    tu_Camel,
+    tu_Traders_Income,
+    tu_Load_Capacity,
+    tu_Saving
+};
+const std::unordered_map<traveler_upgrades, const std::string> tuo_conversion = {
+    {tu_Weight,          "Weight"},
+    {tu_Gold,            "Gold"},
+    {tu_Pottery,         "Pottery"},
+    {tu_Marble,          "Marble"},
+    {tu_Jewelry,         "Jewelry"},
+    {tu_Trader,          "Trader"},
+    {tu_Camel,           "Camel"},
+    {tu_Traders_Income,  "Traders income"},
+    {tu_Load_Capacity,   "Load capacity"},
+    {tu_Saving,          "Saving"}
+};
+
 enum town_options: uint8_t {
     t_Normalia = 0, // 00 - No Effect
     t_Fang_Mo,      // 01 - Begin with 1 Pottery
@@ -158,11 +240,13 @@ struct world {
     uint8_t town;
     uint8_t merch;
     uint8_t witch;
+    uint8_t disaster;
 
     world() {
         town = t_Normalia;
         merch = m_No_Merchant;
         witch = w_No_Witch;
+        disaster = d_No_Disaster;
     };
 };
 
@@ -235,7 +319,9 @@ enum game_actions: uint8_t {
     _a_npc,
     _a_interest,
     _a_merchant,
-    _a_witch
+    _a_witch,
+    _a_disaster,
+    _a_wait
 };
 
 struct ga_data {
@@ -244,6 +330,7 @@ struct ga_data {
     npcs npc_data {};
     merch_options merch_data {};
     witch_options witch_data {};
+    disaster_options disaster_data {};
 
     ga_data(game_actions _action, const uint8_t food, const uint8_t spice, const uint8_t pottery, const uint8_t marble, const uint8_t silk, const uint8_t jewelry) {
         action = _action;
@@ -260,6 +347,10 @@ struct ga_data {
     ga_data(game_actions _action, const witch_options _witch_data) {
         action = _action;
         witch_data = _witch_data;
+    };
+    ga_data(game_actions _action, const disaster_options _disaster_data) {
+        action = _action;
+        disaster_data = _disaster_data;
     };
     explicit ga_data(game_actions _action) {
         action = _action;

@@ -11,7 +11,6 @@ class Player:
     marble: int = field(default=0, compare=False, hash=True)
     silk: int = field(default=0, compare=False, hash=True)
     jewelry: int = field(default=0, compare=False, hash=True)
-    fang_mo_pot: int = field(default=0, compare=False, hash=True)
     # Crew
     trader: int = field(default=1, compare=False, hash=True)
     camel: int = field(default=1, compare=False, hash=True)

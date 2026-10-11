@@ -12,25 +12,43 @@
 #include <iostream>
 #include "../consts/enums.h"
 
+struct PurchaseChoice {
+    uint32_t profit = 0;
+    uint16_t minimum_budget = 0;
+    buy_list buys = buy_list();
+};
+
+struct PurchaseBreakpoint {
+    uint32_t value = 0;
+    uint16_t exact_cost = 0;
+    buy_list buys = buy_list();
+};
+
 class FenwickTree2D {
 public:
     FenwickTree2D() = default;
     explicit FenwickTree2D(const std::vector<buy_option>& elements);
-    std::pair<uint32_t, buy_list> query(const uint16_t& gold, const uint16_t& weight);
+    std::pair<uint32_t, buy_list> query(const uint16_t& gold, const uint16_t& weight) const;
+    std::vector<PurchaseChoice> queryPortfolio(uint16_t gold, uint16_t weight) const;
+    std::vector<PurchaseBreakpoint> queryFrontier(uint16_t gold, uint16_t weight) const;
     void serialize(const std::string& filename) const;
     void deserialize(const std::string& filename);
+    [[nodiscard]] size_t memoryBytes() const noexcept;
 private:
     struct LookupEntry {
         uint32_t profit = 0;
         buy_list buys = buy_list();
     };
 
+    struct Breakpoint {
+        uint32_t profit = 0;
+        buy_list buys = buy_list();
+        uint16_t cost = 0;
+    };
+
     uint16_t max_cost = 0;
     uint16_t max_weight = 0;
-    std::vector<LookupEntry> table;
-
-    [[nodiscard]] size_t index(uint16_t cost, uint16_t weight) const;
-    void set_if_better(uint16_t cost, uint16_t weight, uint32_t profit, const buy_list& buys);
+    std::vector<std::vector<Breakpoint>> rows;
 };
 
 

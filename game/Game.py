@@ -10,7 +10,7 @@ def apply_town(player: Player, town: TownOptions):
         case TownOptions.Normalia:  # 00 - No Effect
             pass
         case TownOptions.Fang_Mo:  # 01 - Begin with 1 Pottery
-            player = dc_replace(player, fang_mo_pot=1, world="1_0_0")
+            player = dc_replace(player, pottery=player.pottery + 1, world="1_0_0")
         case TownOptions.L_Exquise:  # 02 - Traders don't need Food
             npc_data = deepcopy(player.npc_shop)
             consumption = player.food_consumption - (npc_data[NPCs.Trader][NPCData.eat] * player.trader)
@@ -150,13 +150,12 @@ def event_buy_items(player: Player, food, spice, pottery, marble, silk, jewelry)
 def event_sell_items(player: Player):
     new_gold = player.gold + (
             player.spice * player.item_shop[Items.Spice][ItemData.sell] +
-            (player.pottery + player.fang_mo_pot) * player.item_shop[Items.Pottery][ItemData.sell] +
+            player.pottery * player.item_shop[Items.Pottery][ItemData.sell] +
             player.marble * player.item_shop[Items.Marble][ItemData.sell] +
             player.silk * player.item_shop[Items.Silk][ItemData.sell] +
             player.jewelry * player.item_shop[Items.Jewelry][ItemData.sell] +
             player.hand_of_midas * 100)
-    player = dc_replace(player, bought_last=False, gold=new_gold, spice=0, pottery=0, marble=0, silk=0, jewelry=0,
-                        fang_mo_pot=0)
+    player = dc_replace(player, bought_last=False, gold=new_gold, spice=0, pottery=0, marble=0, silk=0, jewelry=0)
     action = f"{player.day}: Sell"
     return end_of_day(player, action)
 
@@ -319,7 +318,7 @@ def event_witch(player: Player, selection: WitchOptions):
 
 
 def check__has_items(player: Player):
-    return player.spice + player.pottery + player.marble + player.silk + player.jewelry + player.fang_mo_pot
+    return player.spice + player.pottery + player.marble + player.silk + player.jewelry
 
 
 def check__points(player: Player, c_type: str):
@@ -327,7 +326,7 @@ def check__points(player: Player, c_type: str):
     # Camels are not worth enough so it discards them
     # Statue is worth too much
     value = (player.spice * player.item_shop[Items.Spice][ItemData.buy] +
-             (player.pottery + player.fang_mo_pot) * player.item_shop[Items.Pottery][ItemData.buy] +
+             player.pottery * player.item_shop[Items.Pottery][ItemData.buy] +
              player.marble * player.item_shop[Items.Marble][ItemData.buy] +
              player.silk * player.item_shop[Items.Silk][ItemData.buy] +
              player.jewelry * player.item_shop[Items.Jewelry][ItemData.buy] +

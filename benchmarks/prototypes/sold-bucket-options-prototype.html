@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PROTOTYPE — Lazy sold bucket</title>
+  <style>
+    :root { color-scheme: dark; --bg:#111416; --panel:#1a2024; --line:#334047; --ink:#edf4f1; --muted:#9eada8; --accent:#6fddb2; --warn:#ffc66d; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,sans-serif; }
+    main { width:min(1080px,calc(100% - 32px)); margin:36px auto 80px; }
+    h1,h2,h3 { line-height:1.12; }
+    h1 { font-size:clamp(28px,5vw,48px); margin-bottom:8px; }
+    h2 { margin-top:34px; }
+    p { color:var(--muted); max-width:82ch; }
+    code { color:var(--accent); }
+    .question,.panel { border:1px solid var(--line); background:var(--panel); border-radius:14px; padding:18px; }
+    .question { border-left:4px solid var(--accent); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:10px; }
+    .metric { background:#14191c; border-radius:10px; padding:12px; }
+    .metric span { display:block; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.07em; }
+    .metric strong { display:block; margin-top:5px; font-size:19px; overflow-wrap:anywhere; }
+    .controls { display:flex; flex-wrap:wrap; gap:9px; margin:12px 0; }
+    button,select { border:1px solid var(--line); border-radius:9px; padding:9px 12px; color:var(--ink); background:#222a2e; font:inherit; }
+    button { cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    button.primary { background:#195a47; border-color:#2d8c70; }
+    button.warn { border-color:#856735; }
+    table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+    th,td { padding:9px; border-bottom:1px solid var(--line); text-align:right; }
+    th:first-child,td:first-child { text-align:left; }
+    .tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+    .tabs button.active { border-color:var(--accent); color:var(--accent); }
+    .step { display:flex; align-items:center; gap:12px; margin:9px 0; }
+    .step.done { opacity:.48; }
+    .note { color:var(--warn); }
+    #log { min-height:46px; white-space:pre-wrap; color:var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Can food remain unresolved after Sell?</h1>
+  <div class="question">
+    <strong>Question this throwaway prototype answers:</strong>
+    Can Sell freeze the cargo sale and carry a lazy <code>food → gold</code> bucket, preserving exact results while avoiding the current eager scan of every possible historical food quantity?
+  </div>
+
+  <h2>Current sold-bucket state</h2>
+  <div class="controls">
+    <label>Workload <select id="preset"><option value="normal">Normal weighted food</option><option value="gay">Gayawaku weightless food</option><option value="multi">Multiple Buy origins</option></select></label>
+    <button data-action="reset">Reset</button>
+  </div>
+  <section class="panel"><div id="state" class="grid"></div><div id="log"></div></section>
+
+  <h2>Free play</h2>
+  <p>Mark the Sell using a strategy, advance the route, and resolve only when you want to inspect the exact historical basket.</p>
+  <div class="controls">
+    <button class="warn" data-action="sell-eager">Sell: eager current model</button>
+    <button class="primary" data-action="sell-lazy">Sell: lazy marker</button>
+    <button data-action="sell-hybrid">Sell: hybrid representative</button>
+    <button data-action="night">Next night</button>
+    <button data-action="trader">Hire Trader</button>
+    <button data-action="interest">Interest</button>
+    <button data-action="resolve">Resolve current food need</button>
+    <button data-action="next-buy">Reach next Buy</button>
+  </div>
+
+  <h2>Guided walkthroughs</h2>
+  <div class="panel"><div id="tabs" class="tabs"></div><div id="walkthrough"></div></div>
+
+  <h2>Deterministic comparison</h2>
+  <p>The operation count is the number of cargo candidates checked. Threshold mode is exact for the listed continuation thresholds; lazy-all is checked against every eager row.</p>
+  <div class="controls"><button class="primary" id="benchmark">Run comparison</button></div>
+  <div class="panel"><div id="verification"></div><div style="overflow:auto"><table id="results"></table></div></div>
+</main>
+
+<script>
+globalThis.SoldBucketPrototype = (() => {
+  const presets = {
+    normal:{name:"Normal weighted food",origins:1,maxFood:46,cargo:84,foodPrice:3,foodWeight:2,capacity:180,consumption:2,seed:11},
+    gay:{name:"Gayawaku weightless food",origins:1,maxFood:255,cargo:128,foodPrice:3,foodWeight:0,capacity:180,consumption:2,seed:19},
+    multi:{name:"Four origin rows",origins:4,maxFood:180,cargo:112,foodPrice:2,foodWeight:0,capacity:220,consumption:3,seed:29}
+  };
+  function random(seed){ let x=seed>>>0; return()=>((x=(1664525*x+1013904223)>>>0)/4294967296); }
+  function workload(key="normal",overrides={}){
+    const cfg={...presets[key],...overrides}; const rnd=random(cfg.seed); const cargo=[{cost:0,weight:0,sale:0,id:0}];
+    for(let i=1;i<=cfg.cargo;i++) cargo.push({cost:2+i*3+Math.floor(rnd()*9),weight:1+Math.floor(i*cfg.capacity/cfg.cargo),sale:8+i*5+Math.floor(rnd()*35),id:i});
+    cargo.sort((a,b)=>a.cost-b.cost||a.weight-b.weight||a.sale-b.sale);
+    const origins=Array.from({length:cfg.origins},(_,i)=>({zeroGold:720+i*41,maximumSpend:620+i*23,foodBefore:i%3,freeWeight:cfg.capacity+8*i,preOps:[{type:"add",value:12},{type:"interest",rate:i%2?0.9:1.1}]}));
+    return {...cfg,cargo,origins};
+  }
+  function transformGold(gold,ops){
+    for(const op of ops){
+      if(op.type==="add") gold+=op.value;
+      if(op.type==="cost"){ if(gold<op.value) return null; gold-=op.value; }
+      if(op.type==="interest") gold=Math.round(op.rate*gold+0.25);
+    }
+    return gold;
+  }
+  function evaluateFood(w,food,postOps=[]){
+    let winner=null,checks=0;
+    for(let oi=0;oi<w.origins.length;oi++){
+      const o=w.origins[oi], foodCost=food*w.foodPrice, foodWeight=food*w.foodWeight;
+      if(foodCost>o.maximumSpend||foodWeight>o.freeWeight) continue;
+      for(const c of w.cargo){
+        checks++;
+        const spend=foodCost+c.cost;
+        if(spend>o.maximumSpend||foodWeight+c.weight>o.freeWeight) continue;
+        let gold=transformGold(o.zeroGold-spend,o.preOps);
+        if(gold===null) continue;
+        gold=transformGold(gold+c.sale,postOps);
+        if(gold===null) continue;
+        if(!winner||gold>winner.gold) winner={food,gold,origin:oi,cargo:c.id,spend};
+      }
+    }
+    return {winner,checks};
+  }
+  function eager(w,postOps=[]){
+    const rows=[],cache={}; let checks=0;
+    for(let food=0;food<=w.maxFood;food++){
+      const result=evaluateFood(w,food,postOps); checks+=result.checks;
+      if(result.winner){ rows.push(result.winner); cache[food]=result.winner; }
+    }
+    return {rows,cache,checks};
+  }
+  function evaluateSet(w,foods,postOps=[]){
+    const rows=[],cache={}; let checks=0;
+    for(const food of [...new Set(foods)].filter(f=>f>=0&&f<=w.maxFood).sort((a,b)=>a-b)){
+      const result=evaluateFood(w,food,postOps); checks+=result.checks;
+      if(result.winner){ rows.push(result.winner); cache[food]=result.winner; }
+    }
+    return {rows,cache,checks};
+  }
+  function thresholds(w){
+    const out=[0]; let food=0;
+    for(let day=1;day<=12;day++){ food+=w.consumption+(day>=4?1:0)+(day>=8?1:0); out.push(Math.min(food,w.maxFood)); }
+    return [...new Set(out)];
+  }
+  function initial(key="normal"){ return {key,phase:"open",minimumFood:0,postOps:[],cache:{},checks:0,last:"Buy is still open; cargo and food are unresolved."}; }
+  function query(state,w,food){
+    if(state.cache[food]) return {...state,last:`Cached exact allocation: ${food} food leaves ${state.cache[food].gold} gold.`};
+    const result=evaluateFood(w,food,state.postOps), cache={...state.cache}; if(result.winner) cache[food]=result.winner;
+    return {...state,cache,checks:state.checks+result.checks,last:result.winner?`Resolved ${food} historical food: cargo #${result.winner.cargo}, ${result.winner.gold} gold.`:`No legal allocation for ${food} food.`};
+  }
+  function transition(state,action){
+    const w=workload(state.key);
+    if(action==="reset") return initial(state.key);
+    if(action==="sell-eager"){ const r=eager(w,state.postOps); return {...state,phase:"sold/eager",cache:r.cache,checks:r.checks,last:`Sell eagerly compiled ${r.rows.length} food rows.`}; }
+    if(action==="sell-lazy") return {...state,phase:"sold/lazy",last:"Sell market and cargo proceeds are frozen; no food row was scanned."};
+    if(action==="sell-hybrid"){ const sold={...state,phase:"sold/hybrid",last:"Sell marked; computing only the minimum-food representative."}; return query(sold,w,state.minimumFood); }
+    if(state.phase==="open") return {...state,last:"Sell must occur before sold-bucket actions."};
+    if(action==="night") return {...state,minimumFood:Math.min(w.maxFood,state.minimumFood+w.consumption),last:`Food debt increased by ${w.consumption}; historical quantity remains unresolved.`};
+    if(action==="trader") return {...state,minimumFood:Math.min(w.maxFood,state.minimumFood+1),postOps:[...state.postOps,{type:"cost",value:50},{type:"add",value:12}],cache:{},last:"Trader affordability is attached to the lazy gold transform; food debt rose by one."};
+    if(action==="interest") return {...state,postOps:[...state.postOps,{type:"interest",rate:1.1}],cache:{},last:"Interest was appended to the sold value function without selecting food."};
+    if(action==="resolve") return query(state,w,state.minimumFood);
+    if(action==="next-buy"){ const wanted=thresholds(w).filter(f=>f>=state.minimumFood); const r=evaluateSet(w,wanted,state.postOps); return {...state,phase:"sold/threshold frontier",cache:r.cache,checks:state.checks+r.checks,last:`Next Buy requested ${wanted.length} meaningful continuation thresholds, not ${w.maxFood+1} integers.`}; }
+    return state;
+  }
+  function compareRows(a,b){ return a.length===b.length&&a.every((row,i)=>row.food===b[i].food&&row.gold===b[i].gold); }
+  function correctness(samples=120){
+    let lazyMatches=0,thresholdMatches=0;
+    for(let i=0;i<samples;i++){
+      const w=workload(i%3===0?"gay":i%3===1?"normal":"multi",{
+        seed:1000+i,maxFood:12+(i%25),cargo:12+(i%19),origins:1+(i%4),
+        foodPrice:i%11===0?0:1+(i%4),foodWeight:i%5===0?0:1+(i%3)
+      });
+      const post=[{type:"cost",value:i%37},{type:"interest",rate:i%2?0.9:1.1},{type:"add",value:i%13}];
+      const all=eager(w,post), lazy=evaluateSet(w,Array.from({length:w.maxFood+1},(_,f)=>f),post); if(compareRows(all.rows,lazy.rows)) lazyMatches++;
+      const wanted=thresholds(w), subset=evaluateSet(w,wanted,post), oracle=all.rows.filter(r=>wanted.includes(r.food)); if(compareRows(oracle,subset.rows)) thresholdMatches++;
+    }
+    return {samples,lazyMatches,thresholdMatches};
+  }
+  function benchOne(key,rounds=30){
+    const w=workload(key), wanted=thresholds(w), observed=wanted.slice(1,5); const variants=[
+      ["Current eager",()=>eager(w)],
+      ["Continuation thresholds",()=>evaluateSet(w,wanted)],
+      ["Lazy state pruned by beam",()=>evaluateSet(w,[])],
+      ["Lazy observed route",()=>evaluateSet(w,observed)],
+      ["Hybrid representative + route",()=>evaluateSet(w,[0,...observed])]
+    ];
+    return variants.map(([name,fn])=>{ let checks=0,rows=0; const start=performance.now(); for(let i=0;i<rounds;i++){const r=fn(); checks+=r.checks; rows+=r.rows.length;} return {name,ms:performance.now()-start,checks:Math.round(checks/rounds),rows:Math.round(rows/rounds),reduction:0}; }).map((r,_,all)=>({...r,reduction:1-r.checks/all[0].checks}));
+  }
+  function runSuite(rounds=30){ return {verification:correctness(),results:Object.keys(presets).flatMap(key=>benchOne(key,rounds).map(r=>({preset:presets[key].name,...r})))}; }
+  return {presets,workload,initial,transition,thresholds,eager,evaluateSet,correctness,runSuite};
+})();
+</script>
+
+<script>
+(() => {
+  const P=globalThis.SoldBucketPrototype, preset=document.querySelector("#preset"), stateEl=document.querySelector("#state"), log=document.querySelector("#log"); let state=P.initial();
+  const scenarios=[
+    {name:"Beam-pruned Sell",text:"The lazy marker makes Sell cheap. If this state loses the next beam cut, no historical food/cargo scan occurs.",steps:[["Mark Sell lazily","sell-lazy"],["Resolve only if it survives","resolve"]]},
+    {name:"Food revealed later",text:"Nights and a Trader raise the historical food floor while the amount remains unresolved.",steps:[["Mark Sell lazily","sell-lazy"],["Advance one night","night"],["Hire Trader","trader"],["Advance again","night"],["Resolve current need","resolve"]]},
+    {name:"Next Buy boundary",text:"A later Buy is the hard boundary. It requests meaningful continuation thresholds instead of every integer.",steps:[["Use hybrid Sell","sell-hybrid"],["Advance one night","night"],["Apply Interest","interest"],["Reach next Buy","next-buy"]]}
+  ]; let active=0,done=0;
+  function render(){ const w=P.workload(state.key), values=[['Phase',state.phase],['Minimum historical food',state.minimumFood],['Food range',`0–${w.maxFood}`],['Cargo candidates',w.cargo.length],['Origin rows',w.origins.length],['Cached food answers',Object.keys(state.cache).length],['Cargo checks performed',state.checks],['Pending gold transforms',state.postOps.length]]; stateEl.innerHTML=values.map(([k,v])=>`<div class="metric"><span>${k}</span><strong>${v}</strong></div>`).join(''); log.textContent=state.last; }
+  function dispatch(action){ state=P.transition(state,action); render(); }
+  document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>dispatch(b.dataset.action)));
+  preset.addEventListener('change',()=>{state=P.initial(preset.value);done=0;render();renderWalk();});
+  const tabs=document.querySelector('#tabs'), walk=document.querySelector('#walkthrough');
+  function renderWalk(){ tabs.innerHTML=scenarios.map((s,i)=>`<button class="${i===active?'active':''}" data-tab="${i}">${s.name}</button>`).join(''); const s=scenarios[active]; walk.innerHTML=`<p>${s.text}</p>${s.steps.map(([label,action],i)=>`<div class="step ${i<done?'done':''}"><button data-step="${i}" ${i!==done?'disabled':''}>${i+1}. ${label}</button><code>${action}</code></div>`).join('')}`; tabs.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{active=+b.dataset.tab;done=0;state=P.initial(preset.value);render();renderWalk();}); walk.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{dispatch(s.steps[done][1]);done++;renderWalk();}); }
+  document.querySelector('#benchmark').onclick=()=>{ const suite=P.runSuite(); document.querySelector('#verification').innerHTML=`<p><strong>Correctness:</strong> lazy-all matched eager in ${suite.verification.lazyMatches}/${suite.verification.samples} deterministic randomized cases; threshold queries matched the eager oracle in ${suite.verification.thresholdMatches}/${suite.verification.samples}.</p>`; document.querySelector('#results').innerHTML='<tr><th>Workload</th><th>Option</th><th>Time</th><th>Cargo checks</th><th>Rows requested</th><th>Check reduction</th></tr>'+suite.results.map(r=>`<tr><td>${r.preset}</td><td>${r.name}</td><td>${r.ms.toFixed(2)} ms</td><td>${r.checks.toLocaleString()}</td><td>${r.rows}</td><td>${(100*r.reduction).toFixed(1)}%</td></tr>`).join(''); };
+  render(); renderWalk();
+})();
+</script>
+</body>
+</html>

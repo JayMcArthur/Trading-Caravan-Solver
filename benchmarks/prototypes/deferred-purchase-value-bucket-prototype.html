@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — Deferred purchase value bucket</title>
+  <style>
+    :root { color-scheme:dark; --bg:#101419; --panel:#192129; --panel2:#11181e; --line:#34434e; --ink:#edf4f6; --muted:#9fb0b9; --accent:#63d7ac; --warn:#f4c875; --bad:#ff8e88; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,sans-serif; }
+    main { width:min(1180px,calc(100% - 30px)); margin:32px auto 60px; }
+    h1,h2,h3 { margin:.2em 0 .5em; }
+    p { max-width:96ch; color:var(--muted); }
+    code { color:var(--ink); }
+    .badge { color:var(--accent); font-size:.76rem; font-weight:800; letter-spacing:.1em; }
+    .panel { margin:18px 0; padding:18px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+    .state { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:9px; }
+    .field,.point,.route-item { padding:10px 12px; border-radius:9px; background:var(--panel2); }
+    .field span,.point span { display:block; color:var(--muted); font-size:.74rem; letter-spacing:.04em; text-transform:uppercase; }
+    .field strong,.point strong { font-size:1.08rem; }
+    .buttons,.tabs { display:flex; flex-wrap:wrap; gap:8px; }
+    button { padding:9px 12px; border:1px solid var(--line); border-radius:9px; color:var(--ink); background:#25333d; cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    button:disabled { opacity:.4; cursor:not-allowed; }
+    .tabs button.active { color:#092219; background:var(--accent); border-color:var(--accent); }
+    .message,.match { color:var(--accent); font-weight:750; }
+    .bad { color:var(--bad); }
+    .warning { color:var(--warn); }
+    .points { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; }
+    .columns { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .route { display:flex; flex-wrap:wrap; gap:8px; }
+    ol { padding-left:22px; }
+    li { margin:8px 0; color:var(--muted); }
+    li button { margin-left:8px; }
+    @media (max-width:760px) { .columns { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="badge">THROWAWAY LOGIC PROTOTYPE</div>
+  <h1>Can one unresolved Buy exactly replace every food/cargo Buy branch?</h1>
+  <p>This demo answers one question: in normal mode, can a Buy remain one symbolic state through nights, crew costs, income, and rounded Interest, then choose its real food/cargo basket at Sell? The left side explicitly creates every legal basket. The right side keeps only an <code>exact old spend → liquid gold now</code> curve plus food debt. After every action it materializes the symbolic bucket and compares both reachable sets.</p>
+
+  <section class="panel">
+    <h2>Current route state</h2>
+    <div id="state" class="state"></div>
+    <p id="message" class="message"></p>
+    <p id="comparison" class="match"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Free play</h2>
+    <p>A second Buy proves that the older marker was food-only, then exposes its nondominated food/gold origin rows for the next marker. It must not combine two days' prices or capacity. “No-cost action” stands in for a route event that consumes a day, clears <code>bought_last</code>, and earns normal end-of-day income.</p>
+    <div id="free" class="buttons"></div>
+  </section>
+
+  <section class="panel columns">
+    <div>
+      <h2>One symbolic bucket</h2>
+      <p>The stored form is only a maximum-spend bound plus a short operation pipeline. These points are materialized for display. Interest evaluates separately for each exact spend; later income never raises the marker's historical spending limit.</p>
+      <div id="curve" class="points"></div>
+    </div>
+    <div>
+      <h2>Explicit control</h2>
+      <p>These are the concrete states the old solver would branch into. The cards are summarized; the equality check uses the complete set.</p>
+      <div id="explicit" class="points"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Resolved Buy markers</h2>
+    <div id="route" class="route"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Guided walkthroughs</h2>
+    <div id="tabs" class="tabs"></div>
+    <div id="scenario"></div>
+  </section>
+</main>
+
+<script>
+const DeferredPurchaseDemo = (() => {
+  const defaults=Object.freeze({
+    day:1,maxDay:15,backpack:16,traders:1,camels:1,traderEat:1,camelEat:1,
+    traderCost:28,camelCost:34,traderIncome:8,dailyIncome:0,camelCapacity:8,
+    interestHundredths:150,setInterest:false,
+    goldBeforeBuy:64,foodBeforeBuy:1,foodPrice:3,foodWeight:2,
+    cargoPrice:7,cargoWeight:4,cargoSellPrice:13
+  });
+
+  const clone=value=>JSON.parse(JSON.stringify(value));
+  const foodRate=world=>world.traders*world.traderEat+world.camels*world.camelEat;
+  const income=world=>world.dailyIncome+world.traders*world.traderIncome;
+  const capacity=world=>world.backpack+world.camels*world.camelCapacity;
+  const roundedInterest=(gold,hundredths)=>Math.floor((gold*hundredths)/100+0.75);
+
+  function makeCatalog(context,world){
+    const baskets=[];
+    const totalCapacity=capacity(world);
+    for(let food=0;food<=40;food+=1){
+      for(let cargo=0;cargo<=40;cargo+=1){
+        const spend=food*world.foodPrice+cargo*world.cargoPrice;
+        const weight=(context.foodBeforeBuy+food)*world.foodWeight+cargo*world.cargoWeight;
+        if(spend<=context.goldBeforeBuy&&weight<=totalCapacity){
+          baskets.push({foodBought:food,cargoBought:cargo,spend});
+        }
+      }
+    }
+    return baskets;
+  }
+
+  function openMarker(world,context,number){
+    const catalog=makeCatalog(context,world);
+    const earned=income(world);
+    const explicitRows=catalog.map(basket=>({
+      ...basket,gold:context.goldBeforeBuy-basket.spend+earned,
+      food:context.foodBeforeBuy+basket.foodBought,cargo:basket.cargoBought
+    }));
+    return {
+      explicitRows,
+      symbolic:{
+        mode:"open",number,context,catalog,cumulativeFoodUsed:0,
+        maxCumulativeFoodUsed:0,requiredFoodBought:0,
+        baseGold:context.goldBeforeBuy+earned,
+        maximumSpend:Math.max(...catalog.map(row=>row.spend)),ops:[]
+      }
+    };
+  }
+
+  function reset(overrides={}){
+    const world={...defaults,...overrides};
+    const context={goldBeforeBuy:world.goldBeforeBuy,foodBeforeBuy:world.foodBeforeBuy};
+    const opened=openMarker(world,context,1);
+    return {
+      world,explicit:{mode:"open",rows:opened.explicitRows},symbolic:opened.symbolic,
+      boughtLast:true,resolvedMarkers:[],dead:false,
+      message:"Marked Buy 1. Concrete basket selection is delayed inside one bucket."
+    };
+  }
+
+  function eligibleCatalog(symbolic){
+    return symbolic.catalog.filter(basket=>
+      basket.spend<=symbolic.maximumSpend&&basket.foodBought>=symbolic.requiredFoodBought
+    );
+  }
+
+  function evaluateGold(symbolic,spend){
+    let gold=symbolic.baseGold-spend;
+    for(const op of symbolic.ops){
+      if(op.kind==="add")gold+=op.amount;
+      else gold=roundedInterest(gold,op.hundredths);
+    }
+    return gold;
+  }
+
+  function cashPoints(symbolic){
+    if(symbolic.mode!=="open")return [];
+    const spends=[...new Set(eligibleCatalog(symbolic).map(row=>row.spend))].sort((a,b)=>a-b);
+    return spends.map(spend=>({spend,gold:evaluateGold(symbolic,spend)}));
+  }
+
+  function materialize(symbolic){
+    if(symbolic.mode!=="open")return symbolic.rows||[];
+    return eligibleCatalog(symbolic).map(basket=>({
+      ...basket,gold:evaluateGold(symbolic,basket.spend),
+      food:symbolic.context.foodBeforeBuy+basket.foodBought-symbolic.cumulativeFoodUsed,
+      cargo:basket.cargoBought
+    }));
+  }
+
+  function canonical(rows){
+    return [...new Set(rows.map(row=>[
+      row.foodBought??"-",row.cargoBought??"-",row.spend??"-",row.gold,row.food,row.cargo
+    ].join("/")))].sort();
+  }
+
+  function pareto(rows){
+    const best=new Map();
+    for(const row of rows){
+      const key=`${row.food}/${row.cargo}`;
+      if(!best.has(key)||best.get(key).gold<row.gold)best.set(key,row);
+    }
+    const unique=[...best.values()];
+    return unique.filter(row=>!unique.some(other=>
+      other!==row&&other.gold>=row.gold&&other.food>=row.food&&
+      (other.gold>row.gold||other.food>row.food)
+    )).sort((a,b)=>a.food-b.food||a.gold-b.gold);
+  }
+
+  function comparison(state){
+    const left=canonical(state.explicit.rows);
+    const right=canonical(materialize(state.symbolic));
+    let first="";
+    const max=Math.max(left.length,right.length);
+    for(let i=0;i<max;i+=1){if(left[i]!==right[i]){first=` First difference: explicit ${left[i]??"none"}; bucket ${right[i]??"none"}.`;break;}}
+    return {ok:left.length===right.length&&!first,left:left.length,right:right.length,first};
+  }
+
+  function fail(state,message){return {...state,dead:true,message};}
+  function block(state,message){return {...state,message};}
+
+  function appendAdd(symbolic,amount){
+    if(amount===0)return symbolic;
+    return {...symbolic,ops:[...symbolic.ops,{kind:"add",amount}]};
+  }
+
+  function restrictAffordable(symbolic,cost){
+    if(evaluateGold(symbolic,0)<cost)return null;
+    let low=0;
+    let high=symbolic.maximumSpend;
+    while(low<high){
+      const middle=Math.floor((low+high+1)/2);
+      if(evaluateGold(symbolic,middle)>=cost)low=middle;
+      else high=middle-1;
+    }
+    return appendAdd({...symbolic,maximumSpend:low},-cost);
+  }
+
+  function startDay(state){
+    if(state.world.day>=state.world.maxDay)return fail(state,"No later action day is available.");
+    const cost=foodRate(state.world);
+    const explicitRows=state.explicit.rows
+      .map(row=>({...row,food:row.food-cost}))
+      .filter(row=>row.food>=0);
+    const symbolic=clone(state.symbolic);
+    symbolic.cumulativeFoodUsed+=cost;
+    symbolic.maxCumulativeFoodUsed=Math.max(symbolic.maxCumulativeFoodUsed,symbolic.cumulativeFoodUsed);
+    symbolic.requiredFoodBought=Math.max(0,symbolic.maxCumulativeFoodUsed-symbolic.context.foodBeforeBuy);
+    const next={
+      ...state,world:{...state.world,day:state.world.day+1},
+      explicit:{...state.explicit,rows:explicitRows},symbolic
+    };
+    if(!explicitRows.length||!eligibleCatalog(next.symbolic).length)return fail(next,"Every original purchase starves on this action path.");
+    return next;
+  }
+
+  function addIncome(state,label){
+    const earned=income(state.world);
+    return {
+      ...state,
+      explicit:{...state.explicit,rows:state.explicit.rows.map(row=>({...row,gold:row.gold+earned}))},
+      symbolic:appendAdd(state.symbolic,earned),
+      boughtLast:false,message:`${label}; end-of-day income added ${earned} gold to every feasible history.`
+    };
+  }
+
+  function noCostDay(state){
+    const next=startDay(state);if(next.dead)return next;
+    return addIncome(next,"Completed a no-cost action");
+  }
+
+  function crewDay(state,kind){
+    let next=startDay(state);if(next.dead)return next;
+    const isTrader=kind==="trader";
+    const price=isTrader?next.world.traderCost:next.world.camelCost;
+    const explicitRows=next.explicit.rows.filter(row=>row.gold>=price).map(row=>({...row,gold:row.gold-price}));
+    const symbolic=restrictAffordable(next.symbolic,price);
+    if(!explicitRows.length||!symbolic||!eligibleCatalog(symbolic).length)return fail(next,`No old-spend choice leaves enough liquid gold for the ${kind}.`);
+    const world={...next.world};world[isTrader?"traders":"camels"]+=1;
+    next={...next,world,explicit:{...next.explicit,rows:explicitRows},symbolic};
+    return addIncome(next,`Bought a ${kind} for ${price} gold`);
+  }
+
+  function interestDay(state){
+    let next=startDay(state);if(next.dead)return next;
+    const rate=next.world.interestHundredths;
+    const explicitRows=next.explicit.rows.map(row=>({...row,gold:roundedInterest(row.gold,rate)}));
+    const symbolic={...next.symbolic,ops:[...next.symbolic.ops,{kind:"interest",hundredths:rate}]};
+    const interestHundredths=next.world.setInterest?rate:Math.max(10,rate-10);
+    next={
+      ...next,world:{...next.world,interestHundredths},
+      explicit:{...next.explicit,rows:explicitRows},symbolic
+    };
+    return addIncome(next,`Applied ${(rate/100).toFixed(2)}× Interest separately to every exact-spend point`);
+  }
+
+  function secondBuy(state){
+    if(state.boughtLast)return block(state,"Blocked: another Buy is not legal immediately after a Buy.");
+    if(!state.explicit.rows.some(row=>row.cargo===0))return block(state,"Blocked: every surviving old Buy contains cargo, so the cargo lock requires Sell.");
+    let next=startDay(state);if(next.dead)return next;
+    const explicitFood=pareto(next.explicit.rows.filter(row=>row.cargo===0));
+    const symbolicFood=pareto(materialize(next.symbolic).filter(row=>row.cargo===0));
+    const markerRows=symbolicFood.map(row=>({
+      number:next.symbolic.number,foodBought:row.foodBought,cargoBought:0,
+      spend:row.spend,reason:"food-only origin for later Buy",gold:row.gold,food:row.food,cargo:0
+    }));
+    return {
+      ...next,explicit:{mode:"boundary",rows:explicitFood},
+      symbolic:{mode:"boundary",rows:symbolicFood,number:next.symbolic.number,markerRows},
+      boughtLast:true,
+      message:`The later Buy proves Buy ${next.symbolic.number} was food-only. ${symbolicFood.length} nondominated food/gold origin row(s) must seed the fresh marker.`
+    };
+  }
+
+  function sell(state){
+    if(!materialize(state.symbolic).some(row=>row.cargo>0))return block(state,"Blocked: no feasible allocation contains trade cargo to Sell.");
+    let next=startDay(state);if(next.dead)return next;
+    const earned=income(next.world);
+    const explicitSold=pareto(next.explicit.rows.filter(row=>row.cargo>0).map(row=>({
+      ...row,gold:row.gold+row.cargo*next.world.cargoSellPrice+earned,cargo:0
+    })));
+    const symbolicSold=pareto(materialize(next.symbolic).filter(row=>row.cargo>0).map(row=>({
+      ...row,gold:row.gold+row.cargo*next.world.cargoSellPrice+earned,cargo:0
+    })));
+    const markerRows=symbolicSold.map(row=>({
+      number:next.symbolic.number,foodBought:row.foodBought,cargoBought:row.cargoBought,
+      spend:row.spend,reason:"candidate selected at Sell",gold:row.gold,food:row.food,cargo:0
+    }));
+    return {
+      ...next,explicit:{mode:"sold",rows:explicitSold},
+      symbolic:{mode:"sold",rows:symbolicSold,number:next.symbolic.number,markerRows},
+      boughtLast:false,message:`Sell joined original Buy costs with today's ${next.world.cargoSellPrice}-gold cargo price and retained ${symbolicSold.length} food/gold frontier row(s).`
+    };
+  }
+
+  function reduce(state,action){
+    if(action.type==="reset")return reset(action.state||{});
+    if(state.dead||state.symbolic.mode!=="open")return block(state,"This walkthrough has reached a resolved Sell or later-Buy boundary; reset to explore another path.");
+    if(action.type==="no-cost")return noCostDay(state);
+    if(action.type==="trader")return crewDay(state,"trader");
+    if(action.type==="camel")return crewDay(state,"camel");
+    if(action.type==="interest")return interestDay(state);
+    if(action.type==="second-buy")return secondBuy(state);
+    if(action.type==="sell")return sell(state);
+    return state;
+  }
+
+  return {reset,reduce,comparison,materialize,cashPoints,foodRate,income,capacity};
+})();
+
+const actions=[
+  ["No-cost action",{type:"no-cost"}],
+  ["Buy Trader",{type:"trader"}],
+  ["Buy Camel",{type:"camel"}],
+  ["Collect Interest",{type:"interest"}],
+  ["Open another Buy",{type:"second-buy"}],
+  ["Sell cargo",{type:"sell"}],
+  ["Reset",{type:"reset"}]
+];
+
+const scenarios=[
+  {
+    name:"Interest bends the curve",
+    intro:"Watch equal differences in old Buy spend become unequal liquid-gold differences after rounded Interest. The bucket remains identical to explicit enumeration because every exact-spend point is transformed independently.",
+    start:{goldBeforeBuy:64,interestHundredths:150},
+    steps:[["Clear bought-last",{type:"no-cost"}],["Collect Interest",{type:"interest"}],["Sell",{type:"sell"}]]
+  },
+  {
+    name:"Crew filters spend",
+    intro:"Food-heavy and cargo-heavy old purchases leave less liquid gold. Hiring crew removes precisely the spend points that could not have afforded that crew, while the Camel's new capacity never enlarges the old marker.",
+    start:{goldBeforeBuy:90,traderCost:35,camelCost:38},
+    steps:[["Hire Trader",{type:"trader"}],["Hire Camel",{type:"camel"}],["Sell",{type:"sell"}]]
+  },
+  {
+    name:"Second Buy: food frontier",
+    intro:"At Interest below 1.00, buying extra food earlier can protect value from shrinking gold. The later Buy rejects old cargo but retains every nondominated old food/gold row to seed its fresh marker.",
+    start:{goldBeforeBuy:31,interestHundredths:55,traderCost:11,camelCost:14,backpack:12},
+    steps:[["Clear bought-last",{type:"no-cost"}],["Collect low-rate Interest",{type:"interest"}],["Reach the later Buy boundary",{type:"second-buy"}]]
+  },
+  {
+    name:"Exact spend at Sell",
+    intro:"The Sell join uses what a basket actually cost at the old Buy. It never treats an at-most budget query as though all of that budget was spent, so unspent gold receives the correct intervening Interest.",
+    start:{goldBeforeBuy:73,foodPrice:4,cargoPrice:9,cargoSellPrice:17,interestHundredths:135},
+    steps:[["Collect Interest",{type:"interest"}],["No-cost day",{type:"no-cost"}],["Sell",{type:"sell"}]]
+  }
+];
+
+let state=DeferredPurchaseDemo.reset();
+let selected=0;
+function dispatch(action){state=DeferredPurchaseDemo.reduce(state,action);render();}
+
+function render(){
+  const cmp=DeferredPurchaseDemo.comparison(state);
+  const symbolicRows=DeferredPurchaseDemo.materialize(state.symbolic);
+  const fields=[
+    ["Day",`${state.world.day}/${state.world.maxDay}`],
+    ["Food per night",DeferredPurchaseDemo.foodRate(state.world)],
+    ["Traders",state.world.traders],["Camels",state.world.camels],
+    ["Capacity now",DeferredPurchaseDemo.capacity(state.world)],
+    ["Daily income",DeferredPurchaseDemo.income(state.world)],
+    ["Interest",(state.world.interestHundredths/100).toFixed(2)],
+    ["Open marker",state.symbolic.number??"resolved"],
+    ["Required old food",state.symbolic.requiredFoodBought??"resolved"],
+    ["Maximum old spend",state.symbolic.maximumSpend??"resolved"],
+    ["Gold operations",state.symbolic.ops?.length??"resolved"],
+    ["Explicit states",state.explicit.rows.length],
+    ["Bucket allocations",symbolicRows.length]
+  ];
+  document.querySelector("#state").innerHTML=fields.map(([label,value])=>`<div class="field"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  const message=document.querySelector("#message");message.textContent=state.message;message.classList.toggle("bad",state.dead);
+  const comparison=document.querySelector("#comparison");
+  comparison.textContent=cmp.ok?`MATCH: one bucket represents all ${cmp.left} explicit reachable state(s).`:`MISMATCH: explicit ${cmp.left}, bucket ${cmp.right}.${cmp.first}`;
+  comparison.classList.toggle("bad",!cmp.ok);
+
+  const points=DeferredPurchaseDemo.cashPoints(state.symbolic);
+  document.querySelector("#curve").innerHTML=points.map(point=>`<div class="point"><span>Exact old spend</span><strong>${point.spend}</strong><span>Liquid gold now: ${point.gold}</span></div>`).join("")||`<p class="warning">The marker is resolved; its Sell frontier is shown by the equality counts above.</p>`;
+  document.querySelector("#explicit").innerHTML=state.explicit.rows.slice(0,24).map(row=>`<div class="point"><span>Old Buy</span><strong>${row.foodBought??"?"} food + ${row.cargoBought??"?"} cargo</strong><span>${row.gold} gold, ${row.food} food now</span></div>`).join("")+`<p>${state.explicit.rows.length>24?`${state.explicit.rows.length-24} more concrete states are included in the equality check.`:"All concrete states are shown."}</p>`;
+
+  const resolved=[...state.resolvedMarkers];
+  if(state.symbolic.markerRows?.length)resolved.push(...state.symbolic.markerRows.slice(0,8));
+  document.querySelector("#route").innerHTML=resolved.map(marker=>`<div class="route-item">Buy ${marker.number}: [${marker.foodBought} food, ${marker.cargoBought} cargo] — ${marker.reason}</div>`).join("")||`<p>No Buy marker has been resolved yet.</p>`;
+}
+
+document.querySelector("#free").innerHTML=actions.map((entry,index)=>`<button data-action="${index}">${entry[0]}</button>`).join("");
+document.querySelector("#free").onclick=event=>{const index=event.target.dataset.action;if(index!==undefined)dispatch(actions[Number(index)][1]);};
+
+function renderScenario(){
+  document.querySelector("#tabs").innerHTML=scenarios.map((scenario,index)=>`<button class="${index===selected?"active":""}" data-tab="${index}">${scenario.name}</button>`).join("");
+  const scenario=scenarios[selected];
+  document.querySelector("#scenario").innerHTML=`<p>${scenario.intro}</p><button id="scenario-reset">Reset this walkthrough</button><ol>${scenario.steps.map((step,index)=>`<li>${step[0]} <button data-step="${index}">Do this</button></li>`).join("")}</ol>`;
+  document.querySelector("#scenario-reset").onclick=()=>dispatch({type:"reset",state:scenario.start});
+  document.querySelector("#scenario").onclick=event=>{const index=event.target.dataset.step;if(index!==undefined)dispatch(scenario.steps[Number(index)][1]);};
+  dispatch({type:"reset",state:scenario.start});
+}
+
+document.querySelector("#tabs").onclick=event=>{const index=event.target.dataset.tab;if(index!==undefined){selected=Number(index);renderScenario();}};
+renderScenario();
+</script>
+</body>
+</html>
