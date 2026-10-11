@@ -5,6 +5,8 @@
 /*.csv
 /benchmarks/results/
 /search_maps/
-/runtime/
+/runtime/*
+!/runtime/ProcessSafety.cpp
+!/runtime/ProcessSafety.h
 __pycache__/
 *.pyc
