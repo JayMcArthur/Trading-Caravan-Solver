@@ -15,7 +15,9 @@ if [[ -f "$pid_file" ]]; then
     fi
 fi
 
-nohup setsid python3 "$repo/scripts/run_million_state_campaign.py" "$@" \
+nohup setsid env LIMIT_MAX_MB="${CAMPAIGN_MAX_MB:-1024}" \
+    LIMIT_MAX_SECONDS="${CAMPAIGN_MAX_SECONDS:-600}" \
+    "$repo/scripts/run_limited.sh" python3 "$repo/scripts/run_million_state_campaign.py" "$@" \
     >>"$log_file" 2>&1 </dev/null &
 campaign_pid=$!
 printf '%s\n' "$campaign_pid" >"$pid_file"

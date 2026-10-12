@@ -27,6 +27,22 @@ because this implementation cannot verify an equivalent hard process limit.
 The wrappers reject memory-limit overrides above 1 GB, and compiler processes
 are capped at 768 MB and serialized even if a caller requests parallel jobs.
 
+The wrappers require a running systemd user manager and cgroup v2. They cap
+aggregate job memory (including charged filesystem cache), disable job swap,
+limit CPU use to one core and allow at most 64 tasks. The existing per-process
+address-space limits remain in force. Nested wrappers stay in the outer job,
+whose memory ceiling is shared by all descendants. If containment cannot be
+established, the command fails before starting the job.
+
+Verify the actual kernel limits with `./scripts/run_tests_safe.sh safety-limits`.
+CMake configuration and compilation both use the bounded wrapper.
+The background campaign launcher also contains its Python supervisor, database
+inspection and solver descendants in one job. Its total deadline defaults to
+600 seconds (`CAMPAIGN_MAX_SECONDS`), with a 1,024 MB aggregate memory ceiling
+(`CAMPAIGN_MAX_MB`). Use a finite batch such as `--max-sessions 1 --max-seconds
+480` to leave time for reporting before that deadline. Do not launch a Python
+campaign supervisor outside `run_limited.sh`.
+
 ## Safe solver run
 
 Use the wrapper instead of invoking the executable directly:
@@ -37,13 +53,12 @@ Use the wrapper instead of invoking the executable directly:
 
 The wrapper applies two independent limits:
 
-- `MAX_MB` is an OS-enforced address-space ceiling. A bug cannot grow past it.
+- `MAX_MB` caps total job memory and each process's virtual address space.
 - `INTERNAL_MB` is the solver's earlier, graceful-stop budget and must be smaller than `MAX_MB`.
 - `ARRAY_LIMIT` is the retained beam width. Candidate accumulators apply exact
   reduction on insertion and apply the lossy beam whenever they reach twice
   this width.
-- `MAX_SECONDS` sets the wrapper's wall-clock deadline; `0` selects the safe
-  one-hour default rather than an unbounded native process.
+- `MAX_SECONDS` sets a positive wall-clock deadline and defaults to 180 seconds.
 
 Examples:
 

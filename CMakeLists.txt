@@ -143,6 +143,11 @@ add_test(
 )
 set_tests_properties(safe_native_tests PROPERTIES TIMEOUT 190)
 add_test(
+    NAME safe_job_limits_tests
+    COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh" safety-limits
+)
+set_tests_properties(safe_job_limits_tests PROPERTIES TIMEOUT 190)
+add_test(
     NAME safe_prefix_timing_tests
     COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh" prefix-timing
 )
@@ -151,6 +156,7 @@ set_tests_properties(safe_prefix_timing_tests PROPERTIES TIMEOUT 190)
 add_custom_target(
     safe-tests
     COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh"
+    COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh" safety-limits
     COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh" prefix-timing
     DEPENDS Merchant_Trading_Caravan_Tests Merchant_Trading_Caravan
     USES_TERMINAL

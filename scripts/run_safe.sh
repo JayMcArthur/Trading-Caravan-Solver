@@ -6,7 +6,7 @@ binary="${BINARY:-$repo/build/Merchant_Trading_Caravan}"
 max_mb="${MAX_MB:-1024}"
 internal_mb="${INTERNAL_MB:-$((max_mb * 3 / 4))}"
 array_limit="${ARRAY_LIMIT:-5000}"
-max_seconds="${MAX_SECONDS:-0}"
+max_seconds="${MAX_SECONDS:-180}"
 
 for value_name in max_mb internal_mb array_limit max_seconds; do
     value=${!value_name}
@@ -15,8 +15,8 @@ for value_name in max_mb internal_mb array_limit max_seconds; do
         exit 2
     fi
 done
-if ((max_mb < 256 || max_mb > 1024 || internal_mb < 128 || internal_mb >= max_mb || array_limit == 0)); then
-    echo "[!] Require 256<=MAX_MB<=1024, INTERNAL_MB>=128 and <MAX_MB, and ARRAY_LIMIT>0" >&2
+if ((max_mb < 256 || max_mb > 1024 || internal_mb < 128 || internal_mb >= max_mb || array_limit == 0 || max_seconds == 0)); then
+    echo "[!] Require 256<=MAX_MB<=1024, INTERNAL_MB>=128 and <MAX_MB, ARRAY_LIMIT>0, and MAX_SECONDS>0" >&2
     exit 2
 fi
 if [[ ! -x "$binary" ]]; then
@@ -24,9 +24,6 @@ if [[ ! -x "$binary" ]]; then
     exit 2
 fi
 
-if ((max_seconds == 0)); then
-    max_seconds=3600
-fi
 internal_seconds=0
 if ((max_seconds > 2)); then
     internal_seconds=$((max_seconds - 2))
