@@ -31,6 +31,13 @@ lines = child.stdout.splitlines()
 assert lines[0] == "0::" + scope, child
 assert lines[1] == str((256 * 1024**2, 256 * 1024**2)), child
 assert resource.getrlimit(resource.RLIMIT_AS)[0] <= 1024 * 1024**2
+inherited = subprocess.run(
+    [str(wrapper), "bash", "-c",
+     'LIMIT_MAX_MB=768 "$1" python3 -c "import resource; print(resource.getrlimit(resource.RLIMIT_AS))"',
+     "bash", str(wrapper)],
+    env=environment, capture_output=True, text=True, check=True,
+)
+assert inherited.stdout.strip() == str((256 * 1024**2, 256 * 1024**2)), inherited
 
 failed = subprocess.run([str(wrapper), "bash", "-c", "exit 7"], env=environment)
 assert failed.returncode == 7, failed

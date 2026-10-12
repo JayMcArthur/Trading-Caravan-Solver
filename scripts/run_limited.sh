@@ -34,7 +34,12 @@ if ! command -v systemd-run >/dev/null 2>&1; then
 fi
 
 ulimit -c 0
-as_bytes=$((max_mb * 1024 * 1024))
+scope_bytes=$((max_mb * 1024 * 1024))
+as_bytes=$scope_bytes
+inherited_as_kb=$(ulimit -Hv)
+if [[ "$inherited_as_kb" =~ ^[0-9]+$ ]] && ((inherited_as_kb * 1024 < as_bytes)); then
+    as_bytes=$((inherited_as_kb * 1024))
+fi
 command=(timeout --signal=TERM --kill-after=5s "${max_seconds}s"
          prlimit --as="$as_bytes" --core=0 -- "$@")
 
@@ -65,14 +70,14 @@ if [[ "${scope_path##*/}" == trading-caravan-limited-*.scope ]]; then
         echo "[!] Existing job scope lacks the required limits; refusing native execution" >&2
         exit 2
     fi
-    echo "[*] Limited process: hard_cap=${max_mb}MB timeout=${max_seconds}s existing_job_cap=$((job_bytes / 1024 / 1024))MB" >&2
+    echo "[*] Limited process: hard_cap=$((as_bytes / 1024 / 1024))MB timeout=${max_seconds}s existing_job_cap=$((job_bytes / 1024 / 1024))MB" >&2
     exec "${command[@]}"
 fi
 
 echo "[*] Limited job: memory=${max_mb}MB swap=0 cpu=1 tasks=64 timeout=${max_seconds}s" >&2
 exec systemd-run --user --scope --quiet --collect --expand-environment=no \
     --unit="trading-caravan-limited-${max_mb}m-$$-$RANDOM.scope" \
-    --property="MemoryMax=$as_bytes" \
+    --property="MemoryMax=$scope_bytes" \
     --property=MemorySwapMax=0 \
     --property=CPUQuota=100% \
     --property=TasksMax=64 \
