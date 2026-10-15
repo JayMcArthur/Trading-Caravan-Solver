@@ -11,7 +11,9 @@ if [[ ! "$max_seconds" =~ ^[1-9][0-9]*$ ]]; then
     exit 2
 fi
 
-cmake -S "$repo" -B "$build_dir" -DCMAKE_BUILD_TYPE="$build_type"
+LIMIT_MAX_MB=${BUILD_MAX_MB:-1024} \
+LIMIT_MAX_SECONDS="$max_seconds" \
+    "$repo/scripts/run_limited.sh" cmake -S "$repo" -B "$build_dir" -DCMAKE_BUILD_TYPE="$build_type"
 LIMIT_MAX_MB=${BUILD_MAX_MB:-1024} \
 LIMIT_MAX_SECONDS="$max_seconds" \
     "$repo/scripts/run_limited.sh" cmake --build "$build_dir" --parallel 1
