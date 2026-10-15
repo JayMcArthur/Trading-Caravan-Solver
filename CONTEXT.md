@@ -3,6 +3,10 @@
 This context describes how the solver represents player decisions and delayed
 resource allocations while exploring a game.
 
+Current priorities and unfinished work live in the
+[Trading Caravan plan](http://localhost:8313/yoss/Projects/TradingCaravan/Plan).
+Operational examples below do not authorize a search or override its deferrals.
+
 ## Language
 
 **Action branch**:
@@ -155,7 +159,7 @@ For fast record discovery, build or resume the Normalia graph through the
 bounded native wrapper with mapped beam order:
 
 ```bash
-cd /home/jay/dev/Python/Trading-Caravan-Solver
+cd /home/jay/develop/personal/Trading-Caravan-Solver
 ARRAY_LIMIT=2000 MAX_SECONDS=600 ./scripts/run_safe.sh \
   --town Normalia \
   --no-incumbent \
