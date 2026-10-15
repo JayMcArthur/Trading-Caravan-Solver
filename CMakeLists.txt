@@ -136,6 +136,12 @@ add_executable(Merchant_Trading_Caravan_Tests
 target_link_libraries(Merchant_Trading_Caravan PRIVATE SQLite::SQLite3 ZLIB::ZLIB)
 target_link_libraries(Merchant_Trading_Caravan_Tests PRIVATE SQLite::SQLite3 ZLIB::ZLIB)
 
+add_executable(ConvertPurchaseCache
+        tools/ConvertPurchaseCache.cpp
+        purchaseHandler/FenwickTree2D.cpp
+        runtime/ProcessSafety.cpp
+)
+
 enable_testing()
 add_test(
     NAME safe_native_tests
@@ -153,12 +159,19 @@ add_test(
 )
 set_tests_properties(safe_prefix_timing_tests PROPERTIES TIMEOUT 190)
 
+add_test(
+    NAME safe_cache_conversion_tests
+    COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh" cache-conversion
+)
+set_tests_properties(safe_cache_conversion_tests PROPERTIES TIMEOUT 190)
+
 add_custom_target(
     safe-tests
     COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh"
     COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh" safety-limits
     COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh" prefix-timing
-    DEPENDS Merchant_Trading_Caravan_Tests Merchant_Trading_Caravan
+    COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_tests_safe.sh" cache-conversion
+    DEPENDS Merchant_Trading_Caravan_Tests Merchant_Trading_Caravan ConvertPurchaseCache
     USES_TERMINAL
 )
 
