@@ -2,6 +2,10 @@
 
 This branch uses a bounded beam search so the solver can run under WSL without allowing the frontier or purchase-table cache to consume all available memory.
 
+Current plans and unfinished work live in the
+[Trading Caravan SilverBullet project](http://localhost:8313/yoss/Projects/TradingCaravan/Plan).
+The repository keeps build/run contracts, code, and benchmark evidence.
+
 ## Build
 
 Use the bounded build wrapper. It uses one build job, serializes compiler
@@ -408,8 +412,8 @@ future demand is discarded. Weighted food can make each integer a real carrying
 capacity breakpoint, so those values remain exact rather than being sampled.
 The original logic prototype is
 [benchmarks/prototypes/food-continuation-generator.html](benchmarks/prototypes/food-continuation-generator.html),
-the original correctness roadmap is
-[docs/FoodContinuationSearchPlan.md](docs/FoodContinuationSearchPlan.md), and
+the remaining record/proof work is tracked in the
+[current plan](http://localhost:8313/yoss/Projects/TradingCaravan/Plans/RecordAndProofWork20261015), and
 the implemented measurements and decisions are in
 [benchmarks/DeferredSearchOptimization2026-09-01.md](benchmarks/DeferredSearchOptimization2026-09-01.md).
 The follow-up deferred-expansion pass made memory checks adaptive while keeping
